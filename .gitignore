@@ -205,3 +205,5 @@ $RECYCLE.BIN/
 
 .vs
 
+bin
+obj
