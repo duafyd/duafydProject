@@ -1,7 +1,9 @@
-namespace UpBot.ViewModels
+namespace UpBot.ViewModels;
+
+public class MainViewModel : BaseViewModel
 {
-    public class MainViewModel : BaseViewModel
+    public MainViewModel()
     {
-        // 전체 상태 관리 필요시 구현
+
     }
 }

@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("UpBot")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+839cf17b206c7b41f4463ffc2a0f1fae561abd8d")]
 [assembly: System.Reflection.AssemblyProductAttribute("UpBot")]
 [assembly: System.Reflection.AssemblyTitleAttribute("UpBot")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

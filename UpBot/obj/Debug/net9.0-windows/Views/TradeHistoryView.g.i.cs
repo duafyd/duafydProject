@@ -53,7 +53,7 @@ namespace UpBot.Views {
                 return;
             }
             _contentLoaded = true;
-            System.Uri resourceLocater = new System.Uri("/UpBot;V1.0.0.0;component/views/tradehistoryview.xaml", System.UriKind.Relative);
+            System.Uri resourceLocater = new System.Uri("/UpBot;component/views/tradehistoryview.xaml", System.UriKind.Relative);
             
             #line 1 "..\..\..\..\Views\TradeHistoryView.xaml"
             System.Windows.Application.LoadComponent(this, resourceLocater);

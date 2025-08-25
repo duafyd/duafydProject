@@ -107,11 +107,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\WangJoon\\source\\repos\\UpBot\\UpBot\\UpBot.csproj",
+      "projectUniqueName": "D:\\sources\\왕준백업\\Sources\\UpBot\\UpBot\\UpBot.csproj",
       "projectName": "UpBot",
-      "projectPath": "C:\\Users\\WangJoon\\source\\repos\\UpBot\\UpBot\\UpBot.csproj",
+      "projectPath": "D:\\sources\\왕준백업\\Sources\\UpBot\\UpBot\\UpBot.csproj",
       "packagesPath": "C:\\Users\\WangJoon\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\WangJoon\\source\\repos\\UpBot\\UpBot\\obj\\",
+      "outputPath": "D:\\sources\\왕준백업\\Sources\\UpBot\\UpBot\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"

@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "GjZeaKBqJt0=",
+  "dgSpecHash": "tPlH2yH9/K8=",
   "success": true,
-  "projectFilePath": "C:\\Users\\WangJoon\\source\\repos\\UpBot\\UpBot\\UpBot.csproj",
+  "projectFilePath": "D:\\sources\\왕준백업\\Sources\\UpBot\\UpBot\\UpBot.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\WangJoon\\.nuget\\packages\\microsoft.data.sqlite.core\\9.0.8\\microsoft.data.sqlite.core.9.0.8.nupkg.sha512",
     "C:\\Users\\WangJoon\\.nuget\\packages\\sqlitepclraw.core\\2.1.10\\sqlitepclraw.core.2.1.10.nupkg.sha512",
