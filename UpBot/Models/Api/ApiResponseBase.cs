@@ -1,6 +1,6 @@
 ﻿namespace UpBot.Models.Api;
 
-public class UpbitApiResponseBase
+public class ApiResponseBase
 {
     public UpbitApiErrorResponse? Error { get; set; }
 }

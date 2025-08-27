@@ -2,6 +2,7 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
 using UpBot.Models.Api;
+using UpBot.Services.Apis;
 
 namespace UpBot.Services
 {
@@ -9,13 +10,15 @@ namespace UpBot.Services
     {
         private readonly HttpClient _client = new();
 
-        public async Task<T?> GetAsync<T>(string url, Dictionary<string, string>? queryParams = null)
+        public QuotationApiClass QuotationApi { get; } = new();
+
+        public async Task<T?> GetAsync<T>(string url, Dictionary<string, object>? queryParams = null)
         {
             try
             {
                 if (queryParams != null && queryParams.Count > 0)
                 {
-                    var query = string.Join("&", queryParams.Select(kvp => $"{Uri.EscapeDataString(kvp.Key)}={Uri.EscapeDataString(kvp.Value)}"));
+                    var query = string.Join("&", queryParams.Select(kvp => $"{Uri.EscapeDataString(kvp.Key)}={Uri.EscapeDataString(kvp.Value.ToString())}"));
                     url += url.Contains("?") ? "&" : "?";
                     url += query;
                 }
@@ -25,30 +28,27 @@ namespace UpBot.Services
                 var json = await response.Content.ReadAsStringAsync();
                 return JsonSerializer.Deserialize<T>(json);
             }
-            catch (HttpRequestException ex)
+            catch (HttpRequestException)
             {
-                // 네트워크 또는 HTTP 오류 처리
-                // 필요에 따라 로그 남기기
                 return default;
             }
-            catch (JsonException ex)
+            catch (JsonException)
             {
-                // JSON 파싱 오류 처리
                 return default;
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                // 기타 예외 처리
                 return default;
             }
         }
 
-        public async Task<List<UpbitMarket>?> GetUpbitMarketsAsync()
+        public async Task<List<Market>?> GetUpbitMarketsAsync()
         {
             const string url = "https://api.upbit.com/v1/market/all";
-            return await GetAsync<List<UpbitMarket>>(url);
+            return await GetAsync<List<Market>>(url);
         }
-
         // POST, PUT 등 필요한 메서드 추가
+
+      
     }
 }

@@ -1,15 +1,17 @@
+using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.DependencyInjection;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
 using UpBot.Models;
+using UpBot.Services;
 
 namespace UpBot.ViewModels
 {
-    public class CoinStatusViewModel : BaseViewModel
+    public partial class CoinStatusViewModel : BaseViewModel
     {
-        public ObservableCollection<TradeHistory> TradeHistories { get; set; } = new();
-        public ICommand StartCommand { get; }
-        public ICommand StopCommand { get; }
-        public ICommand SellAllCommand { get; }
+        private readonly ApiService _api;
+
+        public ObservableCollection<TradeHistory> TradeHistories { get; set; } = new();    
 
         private bool _isRunning;
         public bool IsRunning
@@ -27,9 +29,7 @@ namespace UpBot.ViewModels
 
         public CoinStatusViewModel()
         {
-            StartCommand = new RelayCommand(Start);
-            StopCommand = new RelayCommand(Stop);
-            SellAllCommand = new RelayCommand(SellAll);       
+            _api = App.ServiceProvider.GetRequiredService<ApiService>();        
 
             TradeHistories.Add(new TradeHistory
             {
@@ -53,14 +53,21 @@ namespace UpBot.ViewModels
             });
         }
 
-        private void Start()
+        [RelayCommand]
+        private async Task Start()
         {
             IsRunning = true;
+
+            var list = await _api.QuotationApi.TradingPairs.GetMarketsAsync();
         }
+
+        [RelayCommand]
         private void Stop()
         {
             IsRunning = false;
         }
+
+        [RelayCommand]
         private void SellAll()
         {
             // 일괄 매도 로직
