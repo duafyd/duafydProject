@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
 using UpBot.Models.Api;
@@ -23,9 +24,9 @@ public class QuotationApiClass
             var url = "https://api.upbit.com/v1/market/all";
             var param = new Dictionary<string, object>
             {
-                { "is_details", true } 
+                { "is_details", true }
             };
-            return await Api.GetAsync<List<Market>>(url);
+            return await Api.GetAsync<List<Market>>(url, param);
         }
     }
 
