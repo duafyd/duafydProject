@@ -11,8 +11,19 @@ namespace UpBot.Services.Apis;
 
 public class QuotationApiClass
 {
+    /// <summary>
+    /// 업비트에서 지원하는 모든 페어 목록을 조회합니다.
+    /// </summary>
     public TradingPairsClass TradingPairs { get; set; } = new();
 
+    /// <summary>
+    /// 캔들 목록을 조회합니다.
+    /// </summary>
+    public OHLCVClass OHLCV { get; set; } = new();
+
+    /// <summary>
+    /// 업비트에서 지원하는 모든 페어 목록을 조회합니다.
+    /// </summary>
     public class TradingPairsClass : ApiBase
     {
         /// <summary>
@@ -30,10 +41,80 @@ public class QuotationApiClass
         }
     }
 
-    public class OHLCVClass
+    /// <summary>
+    /// 캔들 목록을 조회합니다.
+    /// </summary>
+    public class OHLCVClass : ApiBase
     {
+        public async Task<List<CandleSecond>?> GetCandlesSecondsAsync(string market, DateTime to, int count = 1)
+        {
+            return await GetCandlesAsync<CandleSecond>(CandleType.Second, market, to, count);
+        }
+
+        public async Task<List<CandleMinute>?> GetCandlesMinutesAsync(string market, DateTime to, int count = 1, CandleMinuteUnitType unit = CandleMinuteUnitType.Minute1)
+        {
+            return await GetCandlesAsync<CandleMinute>(CandleType.Minute, market, to, count, unit);
+        }
+
+        public async Task<List<CandleDay>?> GetCandlesDaysAsync(string market, DateTime to, int count = 1)
+        {
+            return await GetCandlesAsync<CandleDay>(CandleType.Day, market, to, count);
+        }
+
+        public async Task<List<CandleWeek>?> GetCandlesWeeksAsync(string market, DateTime to, int count = 1)
+        {
+            return await GetCandlesAsync<CandleWeek>(CandleType.Week, market, to, count);
+        }
+
+        public async Task<List<CandleMonth>?> GetCandlesMonthsAsync(string market, DateTime to, int count = 1)
+        {
+            return await GetCandlesAsync<CandleMonth>(CandleType.Month, market, to, count);
+        }
+
+        public async Task<List<CandleYear>?> GetCandlesYearsAsync(string market, DateTime to, int count = 1)
+        {
+            return await GetCandlesAsync<CandleYear>(CandleType.Year, market, to, count);
+        }
+
+
+        private async Task<List<T>?> GetCandlesAsync<T>(CandleType candleType, string market, DateTime to, int count = 1, CandleMinuteUnitType unit = CandleMinuteUnitType.None)
+        {
+            string url = candleType switch
+            {
+                CandleType.Second => $"https://api.upbit.com/v1/candles/seconds",
+                CandleType.Minute => $"https://api.upbit.com/v1/candles/minutes/{(int)unit}",
+                CandleType.Day => $"https://api.upbit.com/v1/candles/days",
+                CandleType.Week => $"https://api.upbit.com/v1/candles/weeks",
+                CandleType.Month => $"https://api.upbit.com/v1/candles/months",
+                CandleType.Year => $"https://api.upbit.com/v1/candles/years",
+                _ => throw new ArgumentOutOfRangeException(nameof(candleType))
+            };
+
+            // 조회 캔들 제한 (1~200)
+            if (count > 200)
+                count = 200;
+            else if (count < 1)
+                count = 1;
+
+            var param = new Dictionary<string, object>
+            {
+                { "market", market },
+                { "to", to.ToString("yyyy-MM-ddTHH:mm:ssK") },
+                { "count", count }
+            };
+
+            if (candleType == CandleType.Day)
+            {
+                param.Add("converting_price_unit", "KRW");
+            }
+
+            return await Api.GetAsync<List<T>>(url, param);
+        }
     }
 
+    /// <summary>
+    /// 지정한 페어의 최근 체결 목록을 조회합니다.
+    /// </summary>
     public class TradeClass
     {
     }
