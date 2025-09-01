@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace UpBot.Models.Api;
+﻿namespace UpBot.Models.Api;
 
 /// <summary>
 /// 캔들 종류

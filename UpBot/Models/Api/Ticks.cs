@@ -1,5 +1,8 @@
 ﻿namespace UpBot.Models.Api;
 
+/// <summary>
+/// 지정한 페어의 최근 체결 목록을 조회합니다.
+/// </summary>
 public class Ticks : ApiResponseBase
 {
     /// <summary>

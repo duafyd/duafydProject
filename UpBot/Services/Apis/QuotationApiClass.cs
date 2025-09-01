@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
+using System.Security.Policy;
 using System.Text;
 using System.Threading.Tasks;
 using UpBot.Models.Api;
@@ -115,15 +116,101 @@ public class QuotationApiClass
     /// <summary>
     /// 지정한 페어의 최근 체결 목록을 조회합니다.
     /// </summary>
-    public class TradeClass
+    public class TradeClass : ApiBase
     {
+        /// <summary>
+        /// 지정한 페어의 최근 체결 목록을 조회합니다.
+        /// </summary>
+        /// <param name="market">조회하고자 하는 페어</param>
+        /// <param name="count">체결 내역의 개수 1~500</param>
+        /// <param name="corsor">Pagination을 위한 조회 범위 지정용 커서<br/>
+        ///                      응답에 포함된 sequential_id를 입력하면 이어서 조회 가능</param>
+        /// <param name="days_ago">조회 대상 일자와 요청 시점과의 일 단위 offsetparam>
+        /// <returns></returns>        
+        public async Task<List<Ticks>?> GetTicksAsync(string market, int count = 1, string corsor = "", int days_ago = 0)
+        {
+            var url = "https://api.upbit.com/v1/trades/ticks";
+            var param = new Dictionary<string, object>
+            {
+                { "market", market },
+                { "count", count },
+            };
+            
+            if(!string.IsNullOrEmpty(corsor))
+                param.Add("cursor", corsor);
+
+            if (days_ago > 0)
+                param.Add("days_ago", days_ago);
+
+            return await Api.GetAsync<List<Ticks>>(url, param);
+        }
     }
 
-    public class TickerClass
+    public class TickerClass : ApiBase
     {
+        /// <summary>
+        /// 지정한 페어의 현재가를 조회합니다.
+        /// </summary>
+        /// <param name="markets"></param>
+        /// <returns></returns>
+        public async Task<List<Ticker>?> GetTickersAsync(string markets)
+        {
+            var url = "https://api.upbit.com/v1/ticker";
+            var param = new Dictionary<string, object>
+            {
+                { "markets", markets }
+            };
+            return await Api.GetAsync<List<Ticker>>(url, param);
+        }
+
+        /// <summary>
+        /// 지정한 마켓(호가 자산) 내 모든 페어들의 현재가 정보를 조회합니다.
+        /// </summary>
+        /// <param name="quote_currencies">마켓의 통화 코드</param>
+        /// <returns></returns>
+        public async Task<List<Ticker>?> GetTickerAllAsync(string quote_currencies)
+        {
+            var url = "https://api.upbit.com/v1/ticker/all";
+            var param = new Dictionary<string, object>
+            {
+                { "quote_currencies", quote_currencies }
+            };
+            return await Api.GetAsync<List<Ticker>>(url, param);
+        }
     }
 
-    public class OrderbookClass
+    public class OrderbookClass : ApiBase
     {
+        /// <summary>
+        /// 지정한 종목들의 실시간 호가(Orderbook) 정보를 조회합니다.
+        /// </summary>
+        /// <param name="markets">조회하고자 하는 페어(거래쌍) 목록</param>
+        /// <param level="markets">조회하고자 하는 페어(거래쌍) 목록</param>
+        /// <returns></returns>
+        public async Task<List<OrderBook>?> GetOrderBooksAsync(string markets, string level = "0", int count = 30)
+        {
+            var url = "https://api.upbit.com/v1/orderbook";
+            var param = new Dictionary<string, object>
+            {
+                { "markets", markets },
+                { "level", level },
+                { "count", count },
+            };
+            return await Api.GetAsync<List<OrderBook>>(url, param);
+        }
+
+        /// <summary>
+        /// 지정한 페어들의 호가 단위(tick_size)와 호가 모아보기 단위(supported_levels) 정보를 조회합니다.
+        /// </summary>
+        /// <returns></returns>
+        public async Task<List<OrderBookInstruments>?> GetOrderBookInstruments(string markets)
+        {
+            var url = "https://api.upbit.com/v1/orderbook/instruments";
+            var param = new Dictionary<string, object>
+            {
+                { "markets", markets },                
+            };
+            return await Api.GetAsync<List<OrderBookInstruments>>(url, param);
+        }
     }
 }
