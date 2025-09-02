@@ -22,6 +22,10 @@ public class QuotationApiClass
     /// </summary>
     public OHLCVClass OHLCV { get; set; } = new();
 
+    public TradeClass Trade { get; set; } = new();
+    public TickerClass Ticker { get; set; } = new();
+    public OrderbookClass Orderbook { get; set; } = new();
+
     /// <summary>
     /// 업비트에서 지원하는 모든 페어 목록을 조회합니다.
     /// </summary>

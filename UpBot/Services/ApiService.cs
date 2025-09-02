@@ -20,7 +20,7 @@ namespace UpBot.Services
 
         public QuotationApiClass QuotationApi { get; } = new();
 
-        public async Task<T?> GetAsync<T>(string url, Dictionary<string, object>? queryParams)
+        public async Task<T?> GetAsync<T>(string url, Dictionary<string, object>? queryParams = null)
         {
             try
             {
