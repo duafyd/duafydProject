@@ -15,16 +15,27 @@ public class QuotationApiClass
     /// <summary>
     /// 업비트에서 지원하는 모든 페어 목록을 조회합니다.
     /// </summary>
-    public TradingPairsClass TradingPairs { get; set; } = new();
+    public TradingPairsClass TradingPairs { get; } = new();
 
     /// <summary>
     /// 캔들 목록을 조회합니다.
     /// </summary>
-    public OHLCVClass OHLCV { get; set; } = new();
+    public OHLCVClass OHLCV { get; } = new();
 
-    public TradeClass Trade { get; set; } = new();
-    public TickerClass Ticker { get; set; } = new();
-    public OrderbookClass Orderbook { get; set; } = new();
+    /// <summary>
+    /// 지정한 페어의 최근 체결 목록을 조회합니다.
+    /// </summary>
+    public TradeClass Trade { get; } = new();
+
+    /// <summary>
+    /// 지정한 페어의 현재가를 조회합니다. 요청 시점 기준으로 해당 페어의 티커 스냅샷이 반환됩니다.
+    /// </summary>
+    public TickerClass Ticker { get; } = new();
+
+    /// <summary>
+    /// 지정한 종목들의 실시간 호가(Orderbook) 정보를 조회합니다.
+    /// </summary>
+    public OrderbookClass Orderbook { get; } = new();
 
     /// <summary>
     /// 업비트에서 지원하는 모든 페어 목록을 조회합니다.
@@ -139,8 +150,8 @@ public class QuotationApiClass
                 { "market", market },
                 { "count", count },
             };
-            
-            if(!string.IsNullOrEmpty(corsor))
+
+            if (!string.IsNullOrEmpty(corsor))
                 param.Add("cursor", corsor);
 
             if (days_ago > 0)
@@ -212,7 +223,7 @@ public class QuotationApiClass
             var url = "https://api.upbit.com/v1/orderbook/instruments";
             var param = new Dictionary<string, object>
             {
-                { "markets", markets },                
+                { "markets", markets },
             };
             return await Api.GetAsync<List<OrderBookInstruments>>(url, param);
         }
