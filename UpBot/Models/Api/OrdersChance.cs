@@ -93,7 +93,7 @@ public class OrdersChance : ApiResponseBase
         /// <summary>
         /// 페어 운영 상태
         /// </summary>
-        public string state { get; set; } = string.Empty
+        public string state { get; set; } = string.Empty;
 
         public class OrdersChanceMarketCondition
         {

@@ -26,22 +26,22 @@ public class Ticks : ApiResponseBase
     /// <summary>
     /// 체결 시각의 밀리초단위 타임스탬프
     /// </summary>
-    public long timestamp { get; set; }
+    public decimal timestamp { get; set; }
 
     /// <summary>
     /// 최근 체결 가격
     /// </summary>
-    public double trade_price { get; set; }
+    public decimal trade_price { get; set; }
 
     /// <summary>
     /// 최근 거래 수량
     /// </summary>
-    public double trade_volume { get; set; }
+    public decimal trade_volume { get; set; }
 
     /// <summary>
     /// 전일 종가 (UTC 0시 기준)
     /// </summary>
-    public double prev_closing_price { get; set; }
+    public decimal prev_closing_price { get; set; }
 
     /// <summary>
     /// 전일 종가 대비 가격 변화.
@@ -49,7 +49,7 @@ public class Ticks : ApiResponseBase
     /// 양수(+): 현재 종가가 전일 종가보다 상승한 경우
     /// 음수(-): 현재 종가가 전일 종가보다 하락한 경우
     /// </summary>
-    public double change_price { get; set; }
+    public decimal change_price { get; set; }
 
     /// <summary>   
     /// 매수/매도 주문 구분

@@ -14,17 +14,17 @@ public class OrderBook : ApiResponseBase
     /// <summary>
     /// 조회 요청 시각의 타임스탬프(ms)입니다.
     /// </summary>
-    public long timestamp { get; set; }
+    public decimal timestamp { get; set; }
 
     /// <summary>
     /// 현재 호가의 전체 매도 잔량 합계입니다.
     /// </summary>
-    public double total_ask_size { get; set; }
+    public decimal total_ask_size { get; set; }
 
     /// <summary>
     /// 현재 호가의 전체 매수 잔량 합계입니다.
     /// </summary>
-    public double total_bid_size { get; set; }
+    public decimal total_bid_size { get; set; }
 
     /// <summary>
     /// 호가 정보 리스트입니다. 1호가부터 30호가까지의 정보를 담고 있습니다.
@@ -40,27 +40,25 @@ public class OrderBookUnit
     /// <summary>
     /// 매도 호가입니다.
     /// </summary>
-    public double ask_price { get; set; }
+    public decimal ask_price { get; set; }
 
     /// <summary>
     /// 매수 호가입니다.
     /// </summary>
-    public double bid_price { get; set; }
+    public decimal bid_price { get; set; }
 
     /// <summary>
     /// 매도 잔량입니다.
     /// </summary>
-    public double ask_size { get; set; }
+    public decimal ask_size { get; set; }
 
     /// <summary>
     /// 매수 잔량입니다.
     /// </summary>
-    public double bid_size { get; set; }
+    public decimal bid_size { get; set; }
 
     /// <summary>
     /// 해당 호가가 적용된 가격 단위입니다. 기본값은 0입니다.
     /// </summary>
-    public double level { get; set; }
+    public decimal level { get; set; }
 }
-
-public 

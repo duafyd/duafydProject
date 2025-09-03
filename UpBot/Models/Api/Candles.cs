@@ -67,38 +67,38 @@ public class CandleBase : ApiResponseBase
 
     /// <summary>
     /// 시가
-    /// </summary>
-    public double opening_price { get; set; }
+    /// </summary>  
+    public decimal opening_price { get; set; }
 
     /// <summary>
     /// 고가
     /// </summary>
-    public double high_price { get; set; }
+    public decimal high_price { get; set; }
 
     /// <summary>
     /// 저가
     /// </summary>
-    public double low_price { get; set; }
+    public decimal low_price { get; set; }
 
     /// <summary>
     /// 종가
     /// </summary>
-    public double trade_price { get; set; }
+    public decimal trade_price { get; set; }
 
     /// <summary>
     /// 마지막 틱 저장 시각 (ms)
     /// </summary>
-    public long timestamp { get; set; }
+    public decimal timestamp { get; set; }
 
     /// <summary>
     /// 누적 거래 금액
     /// </summary>
-    public double candle_acc_trade_price { get; set; }
+    public decimal candle_acc_trade_price { get; set; }
 
     /// <summary>
     /// 누적 거래된 디지털 자산 수량
     /// </summary>
-    public double candle_acc_trade_volume { get; set; }
+    public decimal candle_acc_trade_volume { get; set; }
 }
 
 /// <summary>
@@ -119,7 +119,7 @@ public class CandleDay : CandleBase
     /// <summary>
     /// 전일 종가 (UTC 0시 기준)
     /// </summary>
-    public double prev_closing_price { get; set; }
+    public decimal prev_closing_price { get; set; }
 
     /// <summary>
     /// 전일 종가 대비 가격 변화.<br/>
@@ -127,7 +127,7 @@ public class CandleDay : CandleBase
     /// 양수(+): 현재 종가가 전일 종가보다 상승한 경우<br/>
     /// 음수(-) : 현재 종가가 전일 종가보다 하락한 경우
     /// </summary>
-    public double change_price { get; set; }
+    public decimal change_price { get; set; }
 
     /// <summary>
     /// 전일 종가 대비 가격 변화율.<br/>
@@ -135,7 +135,7 @@ public class CandleDay : CandleBase
     /// 양수(+): 가격 상승<br/>
     /// 음수(-) : 가격 하락
     /// </summary>
-    public double change_rate { get; set; }
+    public decimal change_rate { get; set; }
 }
 
 public class CandleWeek : CandleBase 

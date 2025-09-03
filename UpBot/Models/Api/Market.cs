@@ -18,6 +18,25 @@ public class Market : ApiResponseBase
     public string english_name { get; set; }
 
     public MarketEvent? market_event { get; set; }
+        
+    public bool IsSafe
+    {
+        get
+        {
+            if (market_event == null)
+                return true;
+            if (market_event.warning)
+                return false;
+            var caution = market_event.caution;
+            if (caution == null)
+                return true;
+            return !caution.PRICE_FLUCTUATIONS
+                && !caution.TRADING_VOLUME_SOARING
+                && !caution.DEPOSIT_AMOUNT_SOARING
+                && !caution.GLOBAL_PRICE_DIFFERENCES
+                && !caution.CONCENTRATION_OF_SMALL_ACCOUNTS;
+        }
+    }
 }
 
 public class MarketEvent
