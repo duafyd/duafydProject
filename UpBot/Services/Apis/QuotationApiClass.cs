@@ -67,7 +67,7 @@ public class QuotationApiClass
             return await GetCandlesAsync<CandleSecond>(CandleType.Second, market, to, count);
         }
 
-        public async Task<List<CandleMinute>?> GetCandlesMinutesAsync(string market, DateTime to, int count = 1, CandleMinuteUnitType unit = CandleMinuteUnitType.Minute1)
+        public async Task<List<CandleMinute>?> GetCandlesMinutesAsync(string market, DateTime? to = null, int count = 1, CandleMinuteUnitType unit = CandleMinuteUnitType.Minute1)
         {
             return await GetCandlesAsync<CandleMinute>(CandleType.Minute, market, to, count, unit);
         }
@@ -93,7 +93,7 @@ public class QuotationApiClass
         }
 
 
-        private async Task<List<T>?> GetCandlesAsync<T>(CandleType candleType, string market, DateTime to, int count = 1, CandleMinuteUnitType unit = CandleMinuteUnitType.None)
+        private async Task<List<T>?> GetCandlesAsync<T>(CandleType candleType, string market, DateTime? to = null, int count = 1, CandleMinuteUnitType unit = CandleMinuteUnitType.None)
         {
             string url = candleType switch
             {
@@ -115,9 +115,12 @@ public class QuotationApiClass
             var param = new Dictionary<string, object>
             {
                 { "market", market },
-                { "to", to.ToString("yyyy-MM-ddTHH:mm:ssK") },
                 { "count", count }
             };
+            if (to is not null)
+            {
+                param.Add("to", to.Value.ToString("yyyy-MM-ddTHH:mm:ssK"));
+            }
 
             if (candleType == CandleType.Day)
             {
