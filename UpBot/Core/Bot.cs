@@ -22,7 +22,7 @@ public class Bot
     private readonly Timer _sellTimer;
     private bool _isSelling;
 
-    public decimal CashBalance { get; private set; }
+    public decimal? CashBalance { get; private set; }
     public decimal TotalBalance { get; private set; }
 
     public List<Market> Markets { get; private set; } = new();
@@ -67,8 +67,16 @@ public class Bot
 
             _isBuying = true;
 
-            if (CashBalance < 5000)
+            if (CashBalance == null)
+            {
                 return;
+            }
+
+            if (CashBalance < 5000)
+            {
+                Logger.Warn($"잔고부족({CashBalance.Value.ToString("C")})");
+                return;
+            }
 
             Logger.Debug("Checking buy conditions...");
 
@@ -122,7 +130,8 @@ public class Bot
                 var isBuySignal = ShouldBuy(candles);
                 if (isBuySignal)
                 {
-                    Logger.Info($"Buy Signal Detected for {t.market} at Price {t.trade_price}");
+                    var coinName = GetCoinName(t.market);
+                    Logger.Info($"매수 타이밍 확인 for {t.market}/{coinName} at Price {t.trade_price}");
                     // TODO: 실제 매수 로직 구현 필요                    
 
                     // 주문가능 정보 조회
@@ -275,6 +284,8 @@ public class Bot
         if (highVolume) trueCount++;
         if (hammer) trueCount++;
 
+
+        Logger.Debug($"EMA Support: {emaSupport}, RSI Oversold: {rsiOversold}, High Volume: {highVolume}, Hammer: {hammer} => True Conditions: {trueCount}");
         return trueCount >= 3;
     }
 
@@ -299,5 +310,10 @@ public class Bot
         decimal profitPercent = profit / (account.BalanceDecimal * account.AvgBuyPriceDecimal) * 100;
 
         return (evaluation, profit, profitPercent);
+    }
+
+    private string GetCoinName(string market)
+    {
+        return Markets.FirstOrDefault(m => m.market == market)?.korean_name ?? market;
     }
 }
