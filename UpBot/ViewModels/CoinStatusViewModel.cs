@@ -1,17 +1,15 @@
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Microsoft.Extensions.DependencyInjection;
 using System.Collections.ObjectModel;
 using UpBot.Models;
 using UpBot.Services;
-using Timer = System.Timers.Timer;
 
 namespace UpBot.ViewModels
 {
-    public partial class CoinStatusViewModel : BaseViewModel
+    public partial class CoinStatusViewModel : ViewModelBase
     {
-        private readonly ApiService _api;     
-
-        public ObservableCollection<TradeHistory> TradeHistories { get; set; } = new();
+        [ObservableProperty]
+        private ObservableCollection<TradeHistory> _tradeHistories;
 
         private bool _isRunning;
         public bool IsRunning
@@ -19,37 +17,26 @@ namespace UpBot.ViewModels
             get => _isRunning;
             set
             {
-                if (_isRunning != value)
+                if (SetProperty(ref _isRunning, value))
                 {
-                    _isRunning = value;
-                    OnPropertyChanged();
+                    if (value)
+                        Bot.Start();
+                    else
+                        Bot.Stop();
                 }
             }
         }
 
         public CoinStatusViewModel()
         {
-            _api = App.ServiceProvider.GetRequiredService<ApiService>();           
+            AppData.CoinStatusChanged += AppData_CoinStatusChanged;
+        }
 
-            TradeHistories.Add(new TradeHistory
+        private void AppData_CoinStatusChanged(object? sender, EventArgs e)
+        {
+            App.Current.Dispatcher.Invoke(() =>
             {
-                CoinName = "BTC",
-                BuyPrice = 900000,
-                SellPrice = 1000000,
-                Quantity = 0.5m,
-                ProfitAmount = 50000,
-                ProfitPercent = 5.5m,
-                TradeDate = System.DateTime.Today
-            });
-            TradeHistories.Add(new TradeHistory
-            {
-                CoinName = "ETH",
-                BuyPrice = 250000,
-                SellPrice = 300000,
-                Quantity = 2.0m,
-                ProfitAmount = 100000,
-                ProfitPercent = 8.0m,
-                TradeDate = System.DateTime.Today
+                TradeHistories = new ObservableCollection<TradeHistory>(AppData.CoinStatus);
             });
         }
 
@@ -57,8 +44,6 @@ namespace UpBot.ViewModels
         private async Task Start()
         {
             IsRunning = true;
-
-            var list = await _api.QuotationApi.TradingPairs.GetMarketsAsync();
         }
 
         [RelayCommand]

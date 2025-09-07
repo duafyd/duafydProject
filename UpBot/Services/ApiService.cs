@@ -19,6 +19,7 @@ namespace UpBot.Services
         private readonly HttpClient _client = new();
 
         public QuotationApiClass QuotationApi { get; } = new();
+        public ExchangeApiClass ExchangeApi { get; } = new();
 
         public async Task<T?> GetAsync<T>(string url, Dictionary<string, object>? queryParams = null)
         {
@@ -30,15 +31,13 @@ namespace UpBot.Services
                     query = string.Join("&", queryParams.Select(kvp => $"{Uri.EscapeDataString(kvp.Key)}={Uri.EscapeDataString(kvp.Value.ToString())}"));
                     url += url.Contains("?") ? "&" : "?";
                     url += query;
-                }            
+                }
 
                 var request = new HttpRequestMessage(HttpMethod.Get, url);
                 request.Headers.Add("Accept", "application/json");
-                if (string.IsNullOrEmpty(query) == false)
-                {
-                    var jwt = CreateJwt(query);
-                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
-                }
+
+                var jwt = CreateJwt(query);
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
 
                 var response = await _client.SendAsync(request);
                 response.EnsureSuccessStatusCode();
@@ -68,7 +67,7 @@ namespace UpBot.Services
                 var jwtPost = CreateJwt(queryStringBody);
 
                 var request = new HttpRequestMessage(HttpMethod.Post, url);
-                request.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");  
+                request.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
                 request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", jwtPost);
 
@@ -97,7 +96,7 @@ namespace UpBot.Services
                 return "";
 
             var dict = JsonSerializer.Deserialize<Dictionary<string, object>>(json);
-            if (dict == null || dict.Count == 0) 
+            if (dict == null || dict.Count == 0)
                 return "";
 
             var query = new List<string>();

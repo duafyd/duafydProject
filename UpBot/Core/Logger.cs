@@ -18,15 +18,29 @@ public static class Logger
             .CreateLogger();
     }
 
-    public static void Debug(string message) => Log.Debug(message);
-    public static void Info(string message) => Log.Information(message);
-    public static void Warn(string message) => Log.Warning(message);
+    public static void Debug(string message)
+    {
+        Log.Debug(message);
+        System.Diagnostics.Debug.WriteLine(message);
+    }
+    public static void Info(string message) 
+    {
+        Log.Information(message);
+        System.Diagnostics.Debug.WriteLine(message);
+    }
+    public static void Warn(string message) 
+    {
+        Log.Warning(message);
+        System.Diagnostics.Debug.WriteLine(message);
+    }
     public static void Error(string message, Exception? ex = null)
     {
         if (ex == null)
             Log.Error(message);
         else
             Log.Error(ex, message);
+
+        System.Diagnostics.Debug.WriteLine(message);
     }
 
     public static void Close() => Log.CloseAndFlush();

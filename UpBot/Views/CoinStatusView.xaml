@@ -1,7 +1,8 @@
 <UserControl x:Class="UpBot.Views.CoinStatusView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="clr-namespace:UpBot.ViewModels">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"             
+             xmlns:vm="clr-namespace:UpBot.ViewModels"
+             Height="600">
     <UserControl.DataContext>
         <vm:CoinStatusViewModel />
     </UserControl.DataContext>

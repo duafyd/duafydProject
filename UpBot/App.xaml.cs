@@ -20,6 +20,7 @@ namespace UpBot
             serviceCollection.AddSingleton<ApiService>();
             serviceCollection.AddSingleton<DatabaseService>();
             serviceCollection.AddSingleton<Bot>();
+            serviceCollection.AddSingleton<AppDataService>();
 
             ServiceProvider = serviceCollection.BuildServiceProvider();
 

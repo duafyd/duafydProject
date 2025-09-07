@@ -10,25 +10,29 @@ public class Account : ApiResponseBase
     /// <summary>
     /// 주문 가능 수량 또는 금액
     /// </summary>
-    public decimal balance { get; set; }
+    public string balance { get; set; }
+
+    public decimal BalanceDecimal => decimal.TryParse(balance, out var val) ? val : 0m;
 
     /// <summary>
     /// 출금이나 주문 등에 잠겨 있는 잔액
     /// </summary>
-    public decimal locked { get; set; }
+    public string locked { get; set; }
 
     /// <summary>
     /// 매수 평균가
     /// </summary>
-    public decimal avg_buy_price { get; set; }
-    
+    public string avg_buy_price { get; set; }
+
+    public decimal AvgBuyPriceDecimal => decimal.TryParse(avg_buy_price, out var val) ? val : 0m;
+
     /// <summary>
     /// 매수 평균가 수정 여부
     /// </summary>
-    public decimal avg_buy_price_modified { get; set; }
+    public bool avg_buy_price_modified { get; set; }
 
     /// <summary>
     /// 평균가 기준 통화
     /// </summary>
-    public decimal unit_currency { get; set; }
+    public string unit_currency { get; set; }
 }
