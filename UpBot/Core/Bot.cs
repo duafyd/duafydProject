@@ -152,6 +152,12 @@ public class Bot
                         var buyAmount = Math.Min(investAmount, AppData.CashBalance.Value);
                         buyAmount = Math.Floor(buyAmount / (1 + decimal.Parse(orderChange.bid_fee))); // 수수료 고려
 
+                        if(buyAmount < 5000)
+                        {
+                            Logger.Warn($"매수 금액 + 수수료 부족({buyAmount.ToString("C")}) for {t.market}");
+                            continue;
+                        }
+
                         // 시장가로 매수
                         var order = await Api.ExchangeApi.Order.PostMarketBuyAsync(t.market, buyAmount.ToString());
                         if (order == null)
