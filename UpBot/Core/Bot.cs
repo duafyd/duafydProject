@@ -13,8 +13,9 @@ public class Bot
 {
     public int StockCount => 1;
 
-    private readonly ApiService _api;
-    private readonly AppDataService _appData;
+    private readonly ApiService Api;
+    private readonly AppDataService AppData;
+    private readonly DatabaseService Database;
 
     private readonly Timer _buyTimer;
     private bool _isBuying;
@@ -22,15 +23,15 @@ public class Bot
     private readonly Timer _sellTimer;
     private bool _isSelling;
 
-    public decimal? CashBalance { get; private set; }
     public decimal TotalBalance { get; private set; }
 
     public List<Market> Markets { get; private set; } = new();
 
     public Bot()
     {
-        _api = App.ServiceProvider.GetRequiredService<ApiService>();
-        _appData = App.ServiceProvider.GetRequiredService<AppDataService>();
+        Api = App.ServiceProvider.GetRequiredService<ApiService>();
+        AppData = App.ServiceProvider.GetRequiredService<AppDataService>();
+        Database = App.ServiceProvider.GetRequiredService<DatabaseService>();
 
         _buyTimer = new Timer(TimeSpan.FromMinutes(5));
         _buyTimer.Elapsed += async (s, e) => await CheckBuyAsync();
@@ -39,13 +40,13 @@ public class Bot
         _sellTimer.Elapsed += async (s, e) => await CheckSellAsync();
     }
 
-    public void Start()
+    public async void Start()
     {
-        _buyTimer.Start();
-        CheckBuyAsync(); // 즉시 실행
-
         _sellTimer.Start();
-        CheckSellAsync(); // 즉시 실행
+        await CheckSellAsync(); // 즉시 실행
+
+        _buyTimer.Start();
+        await CheckBuyAsync(); // 즉시 실행        
 
         Logger.Info("Bot started.");
     }
@@ -67,14 +68,14 @@ public class Bot
 
             _isBuying = true;
 
-            if (CashBalance == null)
+            if (!AppData.CashBalance.HasValue)
             {
                 return;
             }
 
-            if (CashBalance < 5000)
+            if (AppData.CashBalance < 5000)
             {
-                Logger.Warn($"잔고부족({CashBalance.Value.ToString("C")})");
+                Logger.Warn($"잔고부족({AppData.CashBalance.Value.ToString("C")})");
                 return;
             }
 
@@ -84,7 +85,7 @@ public class Bot
             if (Markets.Count == 0)
             {
                 // 마켓 전체 가져오기
-                var markets = await _api.QuotationApi.TradingPairs.GetMarketsAsync();
+                var markets = await Api.QuotationApi.TradingPairs.GetMarketsAsync();
                 if (markets != null)
                     Markets = markets;
             }
@@ -98,7 +99,7 @@ public class Bot
 
             var marketsStr = string.Join(",", goodMarkets);
             // ticker 데이터 가져오기(거래대금)
-            var tickers = await _api.QuotationApi.Ticker.GetTickersAsync(marketsStr);
+            var tickers = await Api.QuotationApi.Ticker.GetTickersAsync(marketsStr);
 
             // 거래대금 상위 20개
             var top20 = tickers?
@@ -116,7 +117,7 @@ public class Bot
             {
                 Logger.Info($"Checking should buy {t.market}");
 
-                var candles = await _api.QuotationApi.OHLCV.GetCandlesMinutesAsync(
+                var candles = await Api.QuotationApi.OHLCV.GetCandlesMinutesAsync(
                     market: t.market,
                     count: 200,
                     unit: CandleMinuteUnitType.Minute5);
@@ -135,18 +136,36 @@ public class Bot
                     // TODO: 실제 매수 로직 구현 필요                    
 
                     // 주문가능 정보 조회
-                    var orderChange = await _api.ExchangeApi.Order.GetOrdersChanceAsync("KRW-BTC");
-                    //// 시장가로 매수
-                    //var order = await _api.ExchangeApi.Order.PostOrderAsync(new Dictionary<string, object>
-                    //{
-                    //    { "market", t.market },
-                    //    { "side", "bid" },
-                    //    { "volume", null },
-                    //    { "price", Math.Floor(CashBalance * 0.9995m) }, // 수수료 고려
-                    //    { "ord_type", "price" } // 시장가 매수
-                    //});
+                    var orderChange = await Api.ExchangeApi.Order.GetOrdersChanceAsync("KRW-BTC");
 
+                    var investAmount = AppData.TotalBalance / StockCount; // 종목당 투자금액
+                    var buyAmount = Math.Min(investAmount, AppData.CashBalance.Value);
 
+                    // 시장가로 매수
+                    var order = await Api.ExchangeApi.Order.PostMarketBuyAsync(t.market, buyAmount.ToString("F0"));
+                    if(order == null)
+                    {
+                        Logger.Error($"매수 실패 for {t.market}");
+                        continue;
+                    }
+
+                    try
+                    {
+                        var buyInfo = new TradeHistory
+                        {
+                            Id = order.uuid,
+                            Side = order.side,
+                            CoinName = coinName,
+                            BuyPrice = order.price,
+                            Volume = order.executed_volume,
+                        };
+
+                        Database.SaveTradeHistory(buyInfo);
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Error("Error saving trade history", ex);
+                    }
                     break;
                 }
 
@@ -179,7 +198,7 @@ public class Bot
         if (Markets.Count == 0)
         {
             // 마켓 전체 가져오기
-            var markets = await _api.QuotationApi.TradingPairs.GetMarketsAsync();
+            var markets = await Api.QuotationApi.TradingPairs.GetMarketsAsync();
             if (markets != null)
                 Markets = markets;
         }
@@ -188,7 +207,7 @@ public class Bot
         try
         {
             // 보유 자산 조회
-            var account = await _api.ExchangeApi.Asset.GetAccountsAsync();
+            var account = await Api.ExchangeApi.Asset.GetAccountsAsync();
             if (account == null || account.Count == 0)
             {
                 Logger.Warn("보유 자산 없음");
@@ -197,7 +216,7 @@ public class Bot
 
             var list = new List<TradeHistory>();
 
-            CashBalance = account?.FirstOrDefault(a => a.currency == "KRW")?.BalanceDecimal ?? 0;
+            AppData.CashBalance = account?.FirstOrDefault(a => a.currency == "KRW")?.BalanceDecimal ?? 0;
             foreach (var acc in account!.Where(a => a.currency != "KRW" && a.BalanceDecimal > 0))
             {
                 try
@@ -205,11 +224,12 @@ public class Bot
                     var (currentPrice, profit, profitPercent) = await GetCurrentPrice(acc);
                     if (currentPrice >= 5000)
                     {
+                        var coinName = GetCoinName($"{acc.unit_currency}-{acc.currency}");
                         list.Add(new TradeHistory
                         {
-                            CoinName = acc.currency,
+                            CoinName = coinName,
                             BuyPrice = acc.AvgBuyPriceDecimal.ToString(),
-                            Quantity = acc.BalanceDecimal.ToString("#,#"),
+                            Volume = acc.BalanceDecimal.ToString("#,#"),
                             ProfitAmount = profit.ToString("C"),
                             ProfitPercent = profitPercent.ToString("F2") + "%",
                         });
@@ -219,17 +239,36 @@ public class Bot
                             Logger.Info($"Sell Signal Detected for {acc.currency} at Price {currentPrice}, Profit: {profit} ({profitPercent:F2}%)");
 
                             // 매도
-                            var sell = await _api.ExchangeApi.Order.PostMarketSellAsync($"KRW-{acc.currency}", acc.balance);
+                            var sell = await Api.ExchangeApi.Order.PostMarketSellAsync($"KRW-{acc.currency}", acc.balance);
+                            if (sell != null)
+                            {
+                                Logger.Info($"매도 완료 for {acc.currency} at Price {currentPrice}, Profit: {profit} ({profitPercent:F2}%)");
 
-                            // TODO: 결과 DB 저장 필요
+                                var sellInfo = new TradeHistory
+                                {
+                                    Id = sell.uuid,
+                                    Side = sell.side,
+                                    CoinName = coinName,
+                                    BuyPrice = acc.AvgBuyPriceDecimal.ToString(),
+                                    SellPrice = sell.price,
+                                    Volume = sell.executed_volume,
+                                    ProfitAmount = profit.ToString("C"),
+                                    ProfitPercent = profitPercent.ToString("F2") + "%",
+                                };
 
+                                Database.SaveTradeHistory(sellInfo);
+                            }
+                            else
+                            {
+                                Logger.Error($"매도 실패 for {acc.currency}");
+                            }
                         }
                     }
                 }
                 catch { }
             }
 
-            _appData.CoinStatus = new List<TradeHistory>(list);
+            AppData.CoinStatus = new List<TradeHistory>(list);
 
         }
         catch (Exception ex)
@@ -308,7 +347,7 @@ public class Bot
             return (0, 0, 0);
 
         var market = $"{account.unit_currency}-{account.currency}";
-        var ticker = await _api.QuotationApi.Ticker.GetTickersAsync(market);
+        var ticker = await Api.QuotationApi.Ticker.GetTickersAsync(market);
 
         decimal currentPrice = ticker?.FirstOrDefault()?.trade_price ?? 0;
         decimal evaluation = account.BalanceDecimal * currentPrice;

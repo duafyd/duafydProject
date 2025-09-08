@@ -24,9 +24,9 @@ public static class ViewModelLocator
             var viewType = d.GetType();
             var viewName = viewType.Name;
 
-            // 규칙: View 이름 → ViewModel 이름 (예: MainWindow → MainWindowViewModel)
-            var viewModelName = $"{viewName}ViewModel";
-
+            
+            var baseViewName = viewName.EndsWith("View") ? viewName.Substring(0, viewName.Length - 4) : viewName;
+            var viewModelName = $"{baseViewName}ViewModel";
             // ViewModel 네임스페이스: UpBot.ViewModels 및 하위 네임스페이스 모두 검사
             var assembly = viewType.Assembly;
             var viewModelType = assembly.GetTypes()

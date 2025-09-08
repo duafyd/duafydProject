@@ -83,6 +83,18 @@ namespace UpBot.Services.Apis
                 return await PostOrdersAsync(param);
             }
 
+            public async Task<Orders?> PostMarketBuyAsync(string market, string price)
+            {
+                var param = new Dictionary<string, object>
+                {
+                    { "market", market },
+                    { "side", "bid" }, // 매수
+                    { "ord_type", "price" }, // 시장가
+                    { "price", price }
+                };
+                return await PostOrdersAsync(param);
+            }
+
             private async Task<Orders?> PostOrdersAsync(Dictionary<string, object> param)
             {
                 var url = "https://api.upbit.com/v1/orders";

@@ -1,31 +1,92 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using SQLite;
 
 namespace UpBot.Models
 {
-    public partial class TradeHistory : ObservableObject
+    public class TradeHistory : ObservableObject
     {
-        [ObservableProperty]
-        private int _id;
+        [PrimaryKey]
+        public string Id { get; set; }
 
-        [ObservableProperty]
         private string _coinName;
+        /// <summary>
+        /// 코인이름
+        /// </summary>
+        public string CoinName
+        {
+            get => _coinName;
+            set => SetProperty(ref _coinName, value);
+        }
 
-        [ObservableProperty]
+        private string _side;
+        /// <summary>
+        /// 주문 방향(매수/매도)
+        /// Allowed: ask, bid
+        /// </summary>
+        public string Side
+        {
+            get => _side;
+            set => SetProperty(ref _side, value);
+        }
+
         private string _buyPrice;
+        /// <summary>
+        /// 매수 단가
+        /// </summary>
+        public string BuyPrice
+        {
+            get => _buyPrice;
+            set => SetProperty(ref _buyPrice, value);
+        }
 
-        [ObservableProperty]
         private string _sellPrice;
+        /// <summary>
+        /// 매도단가
+        /// </summary>
+        public string SellPrice
+        {
+            get => _sellPrice;
+            set => SetProperty(ref _sellPrice, value);
+        }
 
-        [ObservableProperty]
-        private string _quantity;
+        private string _volume;
+        /// <summary>
+        /// 주문 수량
+        /// </summary>
+        public string Volume
+        {
+            get => _volume;
+            set => SetProperty(ref _volume, value);
+        }
 
-        [ObservableProperty]
         private string _profitAmount;
+        /// <summary>
+        /// 손익 금액
+        /// </summary>
+        public string ProfitAmount
+        {
+            get => _profitAmount;
+            set => SetProperty(ref _profitAmount, value);
+        }
 
-        [ObservableProperty]
         private string _profitPercent;
+        /// <summary>
+        /// 손익 퍼센트
+        /// </summary>
+        public string ProfitPercent
+        {
+            get => _profitPercent;
+            set => SetProperty(ref _profitPercent, value);
+        }
 
-        [ObservableProperty]
         private DateTime _tradeDate;
+        /// <summary>
+        /// 거래일자
+        /// </summary>
+        public DateTime TradeDate
+        {
+            get => _tradeDate;
+            set => SetProperty(ref _tradeDate, value);
+        }
     }
 }
