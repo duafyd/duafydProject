@@ -33,7 +33,7 @@ public class Bot
         AppData = App.ServiceProvider.GetRequiredService<AppDataService>();
         Database = App.ServiceProvider.GetRequiredService<DatabaseService>();
 
-        _buyTimer = new Timer(TimeSpan.FromMinutes(0.5));
+        _buyTimer = new Timer(TimeSpan.FromMinutes(5));
         _buyTimer.Elapsed += async (s, e) => await CheckBuyAsync();
 
         _sellTimer = new Timer(TimeSpan.FromSeconds(2)); // 2초
