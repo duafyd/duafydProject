@@ -88,7 +88,7 @@ public class OrdersChance : ApiResponseBase
         /// <summary>
         /// 최대 주문 가능 금액
         /// </summary>
-        public int max_total { get; set; }
+        public string max_total { get; set; }
 
         /// <summary>
         /// 페어 운영 상태

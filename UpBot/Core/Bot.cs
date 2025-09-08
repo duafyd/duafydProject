@@ -33,7 +33,7 @@ public class Bot
         AppData = App.ServiceProvider.GetRequiredService<AppDataService>();
         Database = App.ServiceProvider.GetRequiredService<DatabaseService>();
 
-        _buyTimer = new Timer(TimeSpan.FromMinutes(5));
+        _buyTimer = new Timer(TimeSpan.FromMinutes(0.5));
         _buyTimer.Elapsed += async (s, e) => await CheckBuyAsync();
 
         _sellTimer = new Timer(TimeSpan.FromSeconds(2)); // 2초
@@ -115,6 +115,9 @@ public class Bot
             // 상위 20개 종목에 대해 매수 조건 확인
             foreach (var t in top20)
             {
+                // 요청 제한 회피                   i
+                await Task.Delay(200);
+
                 Logger.Info($"Checking should buy {t.market}");
 
                 var candles = await Api.QuotationApi.OHLCV.GetCandlesMinutesAsync(
@@ -131,26 +134,32 @@ public class Bot
                 var isBuySignal = ShouldBuy(candles);
                 if (isBuySignal)
                 {
-                    var coinName = GetCoinName(t.market);
-                    Logger.Info($"매수 타이밍 확인 for {t.market}/{coinName} at Price {t.trade_price}");
-                    // TODO: 실제 매수 로직 구현 필요                    
-
-                    // 주문가능 정보 조회
-                    var orderChange = await Api.ExchangeApi.Order.GetOrdersChanceAsync("KRW-BTC");
-
-                    var investAmount = AppData.TotalBalance / StockCount; // 종목당 투자금액
-                    var buyAmount = Math.Min(investAmount, AppData.CashBalance.Value);
-
-                    // 시장가로 매수
-                    var order = await Api.ExchangeApi.Order.PostMarketBuyAsync(t.market, buyAmount.ToString("F0"));
-                    if(order == null)
-                    {
-                        Logger.Error($"매수 실패 for {t.market}");
-                        continue;
-                    }
-
                     try
                     {
+                        var coinName = GetCoinName(t.market);
+                        Logger.Info($"매수 타이밍 확인 for {t.market}/{coinName} at Price {t.trade_price}");
+                        // TODO: 실제 매수 로직 구현 필요                    
+
+                        // 주문가능 정보 조회
+                        var orderChange = await Api.ExchangeApi.Order.GetOrdersChanceAsync(t.market);
+                        if (orderChange == null)
+                        {
+                            Logger.Error($"주문 가능 정보 조회 실패 for {t.market}");
+                            continue;
+                        }
+
+                        var investAmount = AppData.TotalBalance / StockCount; // 종목당 투자금액
+                        var buyAmount = Math.Min(investAmount, AppData.CashBalance.Value);
+                        buyAmount = Math.Floor(buyAmount / (1 + decimal.Parse(orderChange.bid_fee))); // 수수료 고려
+
+                        // 시장가로 매수
+                        var order = await Api.ExchangeApi.Order.PostMarketBuyAsync(t.market, buyAmount.ToString());
+                        if (order == null)
+                        {
+                            Logger.Error($"매수 실패 for {t.market}");
+                            continue;
+                        }
+
                         var buyInfo = new TradeHistory
                         {
                             Id = order.uuid,
@@ -164,14 +173,10 @@ public class Bot
                     }
                     catch (Exception ex)
                     {
-                        Logger.Error("Error saving trade history", ex);
+                        Logger.Error($"Error buying {t.market}", ex);
                     }
                     break;
                 }
-
-                // 요청 제한 회피   
-                if (t != top20.Last())
-                    await Task.Delay(200);
             }
         }
         catch (Exception ex)
@@ -228,8 +233,8 @@ public class Bot
                         list.Add(new TradeHistory
                         {
                             CoinName = coinName,
-                            BuyPrice = acc.AvgBuyPriceDecimal.ToString(),
-                            Volume = acc.BalanceDecimal.ToString("#,#"),
+                            BuyPrice = acc.AvgBuyPriceDecimal.ToString("C"),
+                            Volume = acc.BalanceDecimal.ToString("G29"),
                             ProfitAmount = profit.ToString("C"),
                             ProfitPercent = profitPercent.ToString("F2") + "%",
                         });
@@ -249,7 +254,7 @@ public class Bot
                                     Id = sell.uuid,
                                     Side = sell.side,
                                     CoinName = coinName,
-                                    BuyPrice = acc.AvgBuyPriceDecimal.ToString(),
+                                    BuyPrice = acc.AvgBuyPriceDecimal.ToString("C"),
                                     SellPrice = sell.price,
                                     Volume = sell.executed_volume,
                                     ProfitAmount = profit.ToString("C"),

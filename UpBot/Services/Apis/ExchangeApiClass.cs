@@ -92,6 +92,7 @@ namespace UpBot.Services.Apis
                     { "ord_type", "price" }, // 시장가
                     { "price", price }
                 };
+
                 return await PostOrdersAsync(param);
             }
 

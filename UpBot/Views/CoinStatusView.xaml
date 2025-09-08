@@ -28,7 +28,7 @@
             <ListView.View>
                 <GridView>
                     <GridViewColumn Header="코인명" DisplayMemberBinding="{Binding CoinName}" Width="120"/>
-                    <GridViewColumn Header="매수가" DisplayMemberBinding="{Binding BuyPrice}" Width="120"/>
+                    <GridViewColumn Header="매수가" DisplayMemberBinding="{Binding BuyPrice}" Width="120" />
                     <GridViewColumn Header="매도가" DisplayMemberBinding="{Binding SellPrice}" Width="120"/>
                     <GridViewColumn Header="수량" DisplayMemberBinding="{Binding Volume}" Width="120"/>
                     <GridViewColumn Header="수익 금액" DisplayMemberBinding="{Binding ProfitAmount}" Width="120"/>
