@@ -63,6 +63,31 @@ namespace UpBot.Services.Apis
                 };
                 return await Api.GetAsync<OrdersChance>(url, param);
             }
+
+            /// <summary>
+            /// 시장가 매도
+            /// </summary>
+            /// <param name="market">페어(거래쌍)</param>
+            /// <param name="volume">주문 수량</param>
+            /// <returns></returns>
+            public async Task<Orders?> PostMarketSellAsync(string market, string volume)
+            {
+                var param = new Dictionary<string, object>
+                {
+                    { "market", market },
+                    { "side", "ask" }, // 매도
+                    { "ord_type", "market" }, // 시장가
+                    { "volume", volume }
+                };
+
+                return await PostOrdersAsync(param);
+            }
+
+            private async Task<Orders?> PostOrdersAsync(Dictionary<string, object> param)
+            {
+                var url = "https://api.upbit.com/v1/orders";
+                return await Api.PostAsync<Orders>(url, param);
+            }
         }
 
         public class WithdrawalClass : ApiBase

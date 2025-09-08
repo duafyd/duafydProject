@@ -217,6 +217,12 @@ public class Bot
                         if (profitPercent >= 1.5m || profitPercent <= -0.5m)
                         {
                             Logger.Info($"Sell Signal Detected for {acc.currency} at Price {currentPrice}, Profit: {profit} ({profitPercent:F2}%)");
+
+                            // 매도
+                            var sell = await _api.ExchangeApi.Order.PostMarketSellAsync($"KRW-{acc.currency}", acc.balance);
+
+                            // TODO: 결과 DB 저장 필요
+
                         }
                     }
                 }
