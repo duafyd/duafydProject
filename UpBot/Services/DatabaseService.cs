@@ -1,4 +1,5 @@
 using Microsoft.Data.Sqlite;
+using UpBot.Core;
 using UpBot.Models;
 
 namespace UpBot.Services
@@ -8,6 +9,23 @@ namespace UpBot.Services
         private readonly string _connectionString = "Data Source=UpBot.db";
 
         public DatabaseService()
+        {
+
+        }
+
+        public void Init()
+        {
+            try
+            {
+                CreateTables();
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("DB 초기화 에러", ex);
+            }
+        }
+
+        private void CreateTables()
         {
             using var conn = new SqliteConnection(_connectionString);
             conn.Open();

@@ -2,6 +2,7 @@
 using System.Windows;
 using UpBot.Core;
 using UpBot.Services;
+using UpBot.ViewModels;
 
 namespace UpBot
 {
@@ -15,6 +16,11 @@ namespace UpBot
         protected override void OnStartup(StartupEventArgs e)
         {
             var serviceCollection = new ServiceCollection();
+
+            // ViewModel 등록 
+            serviceCollection.AddTransient<MainWindowViewModel>();
+            serviceCollection.AddTransient<CoinStatusViewModel>();
+            serviceCollection.AddTransient<TradeHistoryViewModel>();
 
             // 싱글턴 서비스 등록
             serviceCollection.AddSingleton<ApiService>();
