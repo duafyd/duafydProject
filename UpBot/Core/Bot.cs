@@ -294,56 +294,78 @@ public class Bot
         }
     }
 
-    /// <summary>
-    /// 단타 매수 타이밍 감지
-    /// </summary>
-    /// <param name="candles"></param>
-    /// <returns></returns>
+    ///// <summary>
+    ///// 단타 매수 타이밍 감지
+    ///// </summary>
+    ///// <param name="candles"></param>
+    ///// <returns></returns>
+    //public bool ShouldBuy(List<CandleMinute> candles)
+    //{
+    //    int rsiPeriod = 14;
+    //    int emaPeriod = 20;
+
+    //    List<decimal> closes = new List<decimal>();
+    //    foreach (var c in candles)
+    //        closes.Add(c.trade_price);
+
+    //    var rsi = TechnicalIndicators.RSI(closes.GetRange(closes.Count - (rsiPeriod + 1), rsiPeriod + 1), rsiPeriod);
+    //    var ema = TechnicalIndicators.EMA(closes.GetRange(closes.Count - emaPeriod, emaPeriod), emaPeriod);
+
+    //    var lastCandle = candles[candles.Count - 1];
+    //    var prevRsi = TechnicalIndicators.RSI(closes.GetRange(closes.Count - (rsiPeriod + 2), rsiPeriod + 1), rsiPeriod);
+
+    //    // 조건 1: EMA20 지지 + 직전봉은 EMA 아래, 현재봉은 EMA 위 (골든크로스)
+    //    bool emaSupport = closes[closes.Count - 2] < ema && lastCandle.trade_price > ema;
+
+    //    // 조건 2: RSI 35 미만 & 직전봉 대비 상승 반전 (완화)
+    //    bool rsiOversold = rsi < 35 && rsi > prevRsi;
+
+    //    // 조건 3: 거래량 급증 (최근 5봉 평균의 1.5배 이상, 완화)
+    //    decimal avgVolume = 0;
+    //    for (int i = candles.Count - 6; i < candles.Count - 1; i++) avgVolume += candles[i].candle_acc_trade_volume;
+    //    avgVolume /= 5;
+    //    bool highVolume = lastCandle.candle_acc_trade_volume > avgVolume * 1.5m;
+
+    //    // 조건 4: 반전 캔들 (Hammer 예시, 그대로 유지)
+    //    decimal body = Math.Abs(lastCandle.trade_price - lastCandle.opening_price);
+    //    decimal lowerShadow = lastCandle.opening_price > lastCandle.trade_price
+    //                          ? lastCandle.trade_price - lastCandle.low_price
+    //                          : lastCandle.opening_price - lastCandle.low_price;
+    //    bool hammer = lowerShadow > body * 2;
+
+    //    // 4개 중 3개 이상 만족하면 매수
+    //    int trueCount = 0;
+    //    if (emaSupport) trueCount++;
+    //    if (rsiOversold) trueCount++;
+    //    if (highVolume) trueCount++;
+    //    if (hammer) trueCount++;
+
+
+    //    Logger.Debug($"EMA Support: {emaSupport}, RSI Oversold: {rsiOversold}, High Volume: {highVolume}, Hammer: {hammer} => True Conditions: {trueCount}");
+    //    return trueCount >= 3;
+    //}
+
     public bool ShouldBuy(List<CandleMinute> candles)
     {
-        int rsiPeriod = 14;
-        int emaPeriod = 20;
+        if (candles.Count < 21) return false;
 
-        List<decimal> closes = new List<decimal>();
-        foreach (var c in candles)
-            closes.Add(c.trade_price);
+        var closes = candles.Select(c => c.trade_price).ToList();
 
-        var rsi = TechnicalIndicators.RSI(closes.GetRange(closes.Count - (rsiPeriod + 1), rsiPeriod + 1), rsiPeriod);
-        var ema = TechnicalIndicators.EMA(closes.GetRange(closes.Count - emaPeriod, emaPeriod), emaPeriod);
+        var ema5 = TechnicalIndicators.EMA(closes, 5).Last();
+        var ema20 = TechnicalIndicators.EMA(closes, 20).Last();
 
-        var lastCandle = candles[candles.Count - 1];
-        var prevRsi = TechnicalIndicators.RSI(closes.GetRange(closes.Count - (rsiPeriod + 2), rsiPeriod + 1), rsiPeriod);
+        var lastCandle = candles.Last();
+        var prevCandle = candles[candles.Count - 2];
 
-        // 조건 1: EMA20 지지 + 직전봉은 EMA 아래, 현재봉은 EMA 위 (골든크로스)
-        bool emaSupport = closes[closes.Count - 2] < ema && lastCandle.trade_price > ema;
+        var rsi = TechnicalIndicators.RSI(closes, 14).Last();
 
-        // 조건 2: RSI 35 미만 & 직전봉 대비 상승 반전 (완화)
-        bool rsiOversold = rsi < 35 && rsi > prevRsi;
+        bool trendUp = ema5 > ema20;  // 추세 확인
+        bool breakout = lastCandle.trade_price > prevCandle.high_price; // 고점 돌파
+        bool notOverbought = rsi < 70; // 과매수 필터
 
-        // 조건 3: 거래량 급증 (최근 5봉 평균의 1.5배 이상, 완화)
-        decimal avgVolume = 0;
-        for (int i = candles.Count - 6; i < candles.Count - 1; i++) avgVolume += candles[i].candle_acc_trade_volume;
-        avgVolume /= 5;
-        bool highVolume = lastCandle.candle_acc_trade_volume > avgVolume * 1.5m;
-
-        // 조건 4: 반전 캔들 (Hammer 예시, 그대로 유지)
-        decimal body = Math.Abs(lastCandle.trade_price - lastCandle.opening_price);
-        decimal lowerShadow = lastCandle.opening_price > lastCandle.trade_price
-                              ? lastCandle.trade_price - lastCandle.low_price
-                              : lastCandle.opening_price - lastCandle.low_price;
-        bool hammer = lowerShadow > body * 2;
-
-        // 4개 중 3개 이상 만족하면 매수
-        int trueCount = 0;
-        if (emaSupport) trueCount++;
-        if (rsiOversold) trueCount++;
-        if (highVolume) trueCount++;
-        if (hammer) trueCount++;
-
-
-        Logger.Debug($"EMA Support: {emaSupport}, RSI Oversold: {rsiOversold}, High Volume: {highVolume}, Hammer: {hammer} => True Conditions: {trueCount}");
-        return trueCount >= 3;
+        return trendUp && breakout && notOverbought;
     }
+
 
     /// <summary>
     /// 보유 코인 가격 구하기
