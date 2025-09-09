@@ -4,6 +4,15 @@
              xmlns:local="clr-namespace:UpBot"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
-         
+        <!-- MahApps.Metro 기본 리소스 -->
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <!-- Accent와 AppTheme 설정 -->
+                <ResourceDictionary Source="pack://application:,,,/MahApps.Metro;component/Styles/Controls.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/MahApps.Metro;component/Styles/Fonts.xaml" />
+                <!-- Colors.xaml과 Accents/Blue.xaml 경로 수정 -->
+                <ResourceDictionary Source="pack://application:,,,/MahApps.Metro;component/Styles/Themes/Light.Blue.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
     </Application.Resources>
 </Application>

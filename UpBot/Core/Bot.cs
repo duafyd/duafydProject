@@ -128,8 +128,13 @@ public class Bot
             // 상위 20개 종목에 대해 매수 조건 확인
             foreach (var t in top20)
             {
+                // 테더 스킵
+                if(t.market == "KRW-USDT")
+                    continue;
+
                 // 요청 제한 회피                   i
                 await Task.Delay(200);
+
 
                 Logger.Info($"Checking should buy {t.market}");
 
