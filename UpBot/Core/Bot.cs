@@ -11,7 +11,20 @@ namespace UpBot.Services;
 
 public class Bot
 {
+    /// <summary>
+    /// 관리 종목 수
+    /// </summary>
     public int StockCount => 1;
+
+    /// <summary>
+    /// 목표 수익률
+    /// </summary>
+    public decimal ProfitTargetPercent => 1.5m;
+    
+    /// <summary>
+    /// 손절 수익률
+    /// </summary>
+    public decimal StopLossPercent => -1.0m;  
 
     private readonly ApiService Api;
     private readonly AppDataService AppData;
@@ -33,7 +46,7 @@ public class Bot
         AppData = App.ServiceProvider.GetRequiredService<AppDataService>();
         Database = App.ServiceProvider.GetRequiredService<DatabaseService>();
 
-        _buyTimer = new Timer(TimeSpan.FromMinutes(5));
+        _buyTimer = new Timer(TimeSpan.FromMinutes(1));
         _buyTimer.Elapsed += async (s, e) => await CheckBuyAsync();
 
         _sellTimer = new Timer(TimeSpan.FromSeconds(2)); // 2초
@@ -245,7 +258,7 @@ public class Bot
                             ProfitPercent = profitPercent.ToString("F2") + "%",
                         });
 
-                        if (profitPercent >= 1.5m || profitPercent <= -0.5m)
+                        if (profitPercent >= ProfitTargetPercent || profitPercent <= StopLossPercent)
                         {
                             Logger.Info($"Sell Signal Detected for {acc.currency} at Price {currentPrice}, Profit: {profit} ({profitPercent:F2}%)");
 
