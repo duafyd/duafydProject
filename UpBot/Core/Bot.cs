@@ -14,17 +14,18 @@ public class Bot
     /// <summary>
     /// 관리 종목 수
     /// </summary>
-    public int StockCount => 1;
+    public int StockCount => 2;
 
     /// <summary>
     /// 목표 수익률(%) - 5분봉용
+    /// 백스톱(상한선) 역할. 트레일링 시작 전까지만 유효
     /// </summary>
-    public decimal ProfitTargetPercent => 1.0m;
+    public decimal ProfitTargetPercent => 1.8m;
 
     /// <summary>
     /// 손절 수익률(%) - 5분봉용
     /// </summary>
-    public decimal StopLossPercent => -0.8m;
+    public decimal StopLossPercent => -0.9m;
 
     /// <summary>
     /// 트레일링 시작 수익률(%) - 이 이상 이익에서만 드로우다운 감시
@@ -139,7 +140,8 @@ public class Bot
             var tickers = await Api.QuotationApi.Ticker.GetTickersAsync(marketsStr);
 
             // 거래대금 상위 20개
-            var top20 = tickers?
+            var top20 = tickers
+                .Where(t => !t.market.Contains("USDT")) // 테더 마켓 제외
                 .OrderByDescending(t => t.acc_trade_price_24h)
                 .Take(20)
                 .ToList();
@@ -151,11 +153,7 @@ public class Bot
 
             // 상위 20개 종목에 대해 매수 조건 확인
             foreach (var t in top20)
-            {
-                // 테더 스킵
-                if (t.market == "KRW-USDT")
-                    continue;
-
+            {                
                 // 쿨다운 체크
                 if (_cooldowns.TryGetValue(t.market, out var untilUtc) && DateTime.UtcNow < untilUtc)
                 {
@@ -213,7 +211,13 @@ public class Bot
                             continue;
                         }
 
-                        var investAmount = AppData.TotalBalance / StockCount; // 종목당 투자금액
+                        var minPerOrder = 5100m; // 5,000 + 버퍼(수수료/슬리피지)
+                        var maxSlots = Math.Max(1, (int)Math.Floor(AppData.CashBalance!.Value / minPerOrder));
+                        // 원하는 상한과 교차
+                        var slots = Math.Min(StockCount, maxSlots);
+
+                        // 종목당 투자금
+                        var investAmount = AppData.TotalBalance / slots;
                         var buyAmount = Math.Min(investAmount, AppData.CashBalance.Value);
                         buyAmount = Math.Floor(buyAmount / (1 + decimal.Parse(orderChange.bid_fee))); // 수수료 고려
 
@@ -315,7 +319,7 @@ public class Bot
                             ProfitPercent = profitPercent.ToString("F2") + "%",
                         });
 
-                        // 트레일링: 최대 수익률 갱신 및 드로우다운 체크
+                        // 트레일링: 최대 수익률 갱신
                         if (_peakProfitPercent.TryGetValue(market, out var peak))
                         {
                             if (profitPercent > peak)
@@ -330,13 +334,17 @@ public class Bot
                             peak = profitPercent;
                         }
 
-                        bool takeProfit = profitPercent >= ProfitTargetPercent;
-                        bool stopLoss = profitPercent <= StopLossPercent;
-                        bool trailing = peak >= TrailStartPercent && (peak - profitPercent) >= TrailDrawdownPercent;
+                        // 트레일링 상태 여부
+                        var inTrailing = peak >= TrailStartPercent;
 
-                        if (takeProfit || stopLoss || trailing)
+                        // 우선순위: 손절(항상) > 트레일링(시작 후) > 고정 목표(트레일링 전까지만)
+                        bool trailing = inTrailing && (peak - profitPercent) >= TrailDrawdownPercent;
+                        bool takeProfit = !inTrailing && profitPercent >= ProfitTargetPercent; // 트레일링 시작 전까지만 TP 허용
+                        bool stopLoss = profitPercent <= StopLossPercent;
+
+                        if (stopLoss || trailing || takeProfit)
                         {
-                            var reason = takeProfit ? "TP" : (stopLoss ? "SL" : "TRAIL");
+                            var reason = stopLoss ? "SL" : (trailing ? "TRAIL" : "TP");
                             Logger.Info($"Sell Signal({reason}) for {acc.currency} at Price {currentPrice}, Profit: {profit} ({profitPercent:F2}%), Peak:{peak:F2}%");
 
                             var sell = await Api.ExchangeApi.Order.PostMarketSellAsync(market, acc.balance);
@@ -450,7 +458,7 @@ public class Bot
     {
         if (account.currency == "KRW")
             return (0, 0, 0);
-        
+
         var market = $"{account.unit_currency}-{account.currency}";
         var ticker = await Api.QuotationApi.Ticker.GetTickersAsync(market);
 
