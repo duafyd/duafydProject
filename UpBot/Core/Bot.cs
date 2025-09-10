@@ -119,13 +119,31 @@ public class Bot
 
             Logger.Debug("Checking buy conditions...");
 
-            // 매수 조건 확인 및 매수 로직 구현          
+            // 매수 조건 확인 및 매수 로직 구현
             if (Markets.Count == 0)
             {
                 // 마켓 전체 가져오기
                 var markets = await Api.QuotationApi.TradingPairs.GetMarketsAsync();
                 if (markets != null)
                     Markets = markets;
+            }
+
+            // 현재 보유 종목 조회(보유 중인 종목은 매수 제외)
+            var accounts = await Api.ExchangeApi.Asset.GetAccountsAsync();
+            var heldMarkets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (accounts != null)
+            {
+                foreach (var a in accounts.Where(a => a.currency != "KRW" && a.BalanceDecimal > 0))
+                {
+                    heldMarkets.Add($"{a.unit_currency}-{a.currency}");
+                }
+            }
+
+            // 슬롯 초과 보유 시 매수 중단
+            if (heldMarkets.Count >= StockCount)
+            {
+                Logger.Debug($"보유 종목 {heldMarkets.Count}개가 슬롯 {StockCount}개 이상. 매수 건너뜀.");
+                return;
             }
 
             // 유의종목 제외한 KRW 마켓만 필터링
@@ -146,14 +164,21 @@ public class Bot
                 .Take(20)
                 .ToList();
 
-            // 로그 기록            
+            // 로그 기록
             var top20Dict = top20?.ToDictionary(t => t.market, t => t.acc_trade_price_24h);
             var top20Json = JsonSerializer.Serialize(top20Dict);
             Logger.Info($"Top 20 Markets by 24h Trade Price: {top20Json}");
 
             // 상위 20개 종목에 대해 매수 조건 확인
             foreach (var t in top20)
-            {                
+            {
+                // 보유 중이면 스킵
+                if (heldMarkets.Contains(t.market))
+                {
+                    Logger.Debug($"Skip {t.market} - 이미 보유 중");
+                    continue;
+                }
+
                 // 쿨다운 체크
                 if (_cooldowns.TryGetValue(t.market, out var untilUtc) && DateTime.UtcNow < untilUtc)
                 {
