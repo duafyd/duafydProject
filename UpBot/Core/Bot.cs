@@ -133,7 +133,7 @@ public class Bot
             var heldMarkets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             if (accounts != null)
             {
-                foreach (var a in accounts.Where(a => a.currency != "KRW" && a.BalanceDecimal > 0))
+                foreach (var a in accounts.Where(a => a.currency != "KRW" && a.BalanceDecimal > 0 && a.AvgBuyPriceDecimal > 0))
                 {
                     heldMarkets.Add($"{a.unit_currency}-{a.currency}");
                 }
@@ -323,7 +323,7 @@ public class Bot
             var list = new List<TradeHistory>();
 
             AppData.CashBalance = account?.FirstOrDefault(a => a.currency == "KRW")?.BalanceDecimal ?? 0;
-            foreach (var acc in account!.Where(a => a.currency != "KRW" && a.BalanceDecimal > 0))
+            foreach (var acc in account!.Where(a => a.currency != "KRW" && a.BalanceDecimal > 0 && a.AvgBuyPriceDecimal > 0))
             {
                 try
                 {

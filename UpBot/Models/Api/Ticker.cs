@@ -15,55 +15,55 @@ public class Ticker : ApiResponseBase
     /// 최근 체결 일자 (UTC 기준)
     /// [형식] yyyyMMdd
     /// </summary>
-    public string trade_date { get; set; }
+    public string? trade_date { get; set; }
 
     /// <summary>
     /// 최근 체결 시각 (UTC 기준)
     /// [형식] HHmmss
     /// </summary>
-    public string trade_time { get; set; }
+    public string? trade_time { get; set; }
 
     /// <summary>
     /// 최근 체결 일자 (KST 기준)
     /// [형식] yyyyMMdd
     /// </summary>
-    public string trade_date_kst { get; set; }
+    public string? trade_date_kst { get; set; }
 
     /// <summary>
     /// 최근 체결 시각 (KST 기준)
     /// [형식] HHmmss
     /// </summary>
-    public string trade_time_kst { get; set; }
+    public string? trade_time_kst { get; set; }
 
     /// <summary>
     /// 체결 시각의 밀리초단위 타임스탬프
     /// </summary>
-    public decimal trade_timestamp { get; set; }
+    public long? trade_timestamp { get; set; }
 
     /// <summary>
     /// 시가. 해당 페어의 첫 거래 가격입니다.
     /// </summary>
-    public decimal opening_price { get; set; }
+    public decimal? opening_price { get; set; }
 
     /// <summary>
     /// 고가. 해당 페어의 최고 거래 가격입니다.
     /// </summary>
-    public decimal high_price { get; set; }
+    public decimal? high_price { get; set; }
 
     /// <summary>
     /// 저가. 해당 페어의 최저 거래 가격입니다.
     /// </summary>
-    public decimal low_price { get; set; }
+    public decimal? low_price { get; set; }
 
     /// <summary>
     /// 종가. 해당 페어의 현재 가격입니다.
     /// </summary>
-    public decimal trade_price { get; set; }
+    public decimal? trade_price { get; set; }
 
     /// <summary>
     /// 전일 종가 (UTC 0시 기준)
     /// </summary>
-    public decimal prev_closing_price { get; set; }
+    public decimal? prev_closing_price { get; set; }
 
     /// <summary>
     /// 가격 변동 상태
@@ -103,7 +103,7 @@ public class Ticker : ApiResponseBase
     /// <summary>
     /// 최근 거래 수량
     /// </summary>
-    public decimal trade_volume { get; set; }
+    public decimal? trade_volume { get; set; }
 
     /// <summary>
     /// 누적 거래 금액 (UTC 0시 기준)
@@ -128,27 +128,27 @@ public class Ticker : ApiResponseBase
     /// <summary>
     /// 52주 신고가
     /// </summary>
-    public decimal highest_52_week_price { get; set; }
+    public decimal? highest_52_week_price { get; set; }
 
     /// <summary>
     /// 52주 신고가 달성일
     /// [형식] yyyy-MM-dd
     /// </summary>
-    public string highest_52_week_date { get; set; }
+    public string? highest_52_week_date { get; set; }
 
     /// <summary>
     /// 52주 신저가
     /// </summary>
-    public decimal lowest_52_week_price { get; set; }
+    public decimal? lowest_52_week_price { get; set; }
 
     /// <summary>
     /// 52주 신저가 달성일
     /// [형식] yyyy-MM-dd
     /// </summary>
-    public string lowest_52_week_date { get; set; }
+    public string? lowest_52_week_date { get; set; }
 
     /// <summary>
     /// 현재가 정보가 반영된 시각의 타임스탬프(ms)
     /// </summary>
-    public decimal timestamp { get; set; }
+    public long? timestamp { get; set; }
 }
