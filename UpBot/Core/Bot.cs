@@ -20,22 +20,22 @@ public class Bot
     /// 목표 수익률(%) - 5분봉용
     /// 백스톱(상한선) 역할. 트레일링 시작 전까지만 유효
     /// </summary>
-    public decimal ProfitTargetPercent => 1.8m;
+    public decimal ProfitTargetPercent => 1.5m;
 
     /// <summary>
     /// 손절 수익률(%) - 5분봉용
     /// </summary>
-    public decimal StopLossPercent => -0.9m;
+    public decimal StopLossPercent => -0.7m;
 
     /// <summary>
     /// 트레일링 시작 수익률(%) - 이 이상 이익에서만 드로우다운 감시
     /// </summary>
-    public decimal TrailStartPercent => 1.0m;
+    public decimal TrailStartPercent => 0.7m;
 
     /// <summary>
     /// 트레일링 드로우다운 폭(%) - 최대이익에서 이만큼 반납 시 매도
     /// </summary>
-    public decimal TrailDrawdownPercent => 0.6m;
+    public decimal TrailDrawdownPercent => 0.2m;
 
     /// <summary>
     /// 매매 후 동일 종목 쿨다운 시간
@@ -204,7 +204,7 @@ public class Bot
                     continue;
                 }
 
-                // 봉 마감 시점 체크(새 봉 생성 시에만 평가)
+                // 봉 마감 시점 체크(새 봉 생성 시에만 평가) + 보조(실시간) 체크 허용
                 var firstKst = DateTime.Parse(candles.First().candle_date_time_kst);
                 var lastKst = DateTime.Parse(candles.Last().candle_date_time_kst);
                 var latestCandle = firstKst >= lastKst ? candles.First() : candles.Last();
@@ -212,16 +212,23 @@ public class Bot
                 var keyClose = $"{t.market}:{(int)unit}";
                 var latestKstStr = latestCandle.candle_date_time_kst;
 
+                var isNewClosedCandle = true;
                 if (_lastProcessedCandleKst.TryGetValue(keyClose, out var prevKst) && prevKst == latestKstStr)
                 {
-                    Logger.Debug($"Skip {t.market} - no new closed candle. last={latestKstStr}");
-                    continue;
+                    // 이전에 처리한 것과 같은 봉이면: 보조(실시간) 체크로 평가
+                    isNewClosedCandle = false;
+                    Logger.Debug($"No new closed candle for {t.market}. Running live pre-check with ticker price {t.trade_price}.");
+                }
+                else
+                {
+                    // 새로 마감한 봉이면 마킹
+                    _lastProcessedCandleKst[keyClose] = latestKstStr;
                 }
 
-                // 중복 처리 방지: 같은 봉에서는 재평가하지 않도록 즉시 마킹
-                _lastProcessedCandleKst[keyClose] = latestKstStr;
+                var isBuySignal = isNewClosedCandle
+                    ? ShouldBuy(candles)
+                    : ShouldBuy(candles, livePrice: t.trade_price); // 보조 신호: 실시간 가격으로 돌파/몸통 재평가
 
-                var isBuySignal = ShouldBuy(candles);
                 if (isBuySignal)
                 {
                     try
@@ -420,12 +427,13 @@ public class Bot
     }
 
     /// <summary>
-    /// 단타 매수 타이밍 감지(함정 회피형)
-    /// - 추세 질(EMA20>EMA60, EMA20 상승) + 건전한 돌파(몸통 비율, EMA 이격 제한)
-    /// - RSI 50~68 범위의 모멘텀
-    /// - 거래량 스파이크, 적정 ATR 범위
+    /// 단타 매수 타이밍 감지(완화+개선 버전)
+    /// - 추세 OR 돌파 허용: (trendUp || breakout)
+    /// - RSI 35~70
+    /// - 거래량 완화: 최근 5봉 평균의 1.2배 이상 또는 ATR 보조(>=0.3% && <=5.0%)
+    /// - 봉 마감이 없어도 livePrice로 보조 체크 가능
     /// </summary>
-    public bool ShouldBuy(List<CandleMinute> candles)
+    public bool ShouldBuy(List<CandleMinute> candles, decimal? livePrice = null)
     {
         if (candles == null || candles.Count < 80) return false;
 
@@ -442,6 +450,9 @@ public class Bot
         var last = candles[^1];
         var prev = candles[^2];
 
+        // 실시간 평가용 가격(없으면 종가 사용)
+        var priceNow = livePrice ?? last.trade_price;
+
         // RSI
         var rsiSeries = TechnicalIndicators.RSI(closes, 14);
         if (rsiSeries.Count == 0) return false;
@@ -450,31 +461,37 @@ public class Bot
         // 변동성(ATR)
         var atr = ComputeAtr(candles, 14);
         if (atr <= 0) return false;
-        var atrPct = atr / (last.trade_price == 0 ? 1 : last.trade_price) * 100m;
+        var atrPct = atr / (priceNow == 0 ? 1 : priceNow) * 100m;
 
-        // 거래량 평균(최근 10봉)
-        decimal avgVol10 = 0m;
-        for (int i = candles.Count - 11; i < candles.Count - 1; i++)
-            avgVol10 += candles[i].candle_acc_trade_volume;
-        avgVol10 /= 10m;
+        // 거래량 평균(최근 5봉, 마지막 봉 제외)
+        decimal avgVol5 = 0m;
+        for (int i = candles.Count - 6; i < candles.Count - 1; i++)
+            avgVol5 += candles[i].candle_acc_trade_volume;
+        avgVol5 /= 5m;
 
-        // 조건
-        bool trendUp = ema20 > ema60 && ema20 > ema20Prev; // 상승 추세 + 기울기 양수
-        bool breakout = last.trade_price > prev.high_price; // 직전 고점 돌파
-        decimal body = Math.Abs(last.trade_price - last.opening_price);
+        // 조건(완화+개선)
+        bool trendUp = ema20 > ema60 && ema20 > ema20Prev; // 기존 추세 정의 유지
+        bool breakout = priceNow > prev.high_price;        // 실시간 가격으로 돌파 판단
+        decimal body = Math.Abs(priceNow - last.opening_price);
         decimal range = Math.Max(0.00000001m, last.high_price - last.low_price);
-        bool strongBody = (body / range) >= 0.6m; // 몸통 비율
-        bool notOverextended = Math.Abs(last.trade_price - ema20) / last.trade_price <= 0.01m; // EMA20 이격 ≤ 1%
-        bool rsiOk = rsi >= 50m && rsi <= 68m; // 과열 추격 방지
-        bool volOk = last.candle_acc_trade_volume >= (avgVol10 * 1.5m); // 거래량 스파이크
-        bool atrOk = atrPct >= 0.2m && atrOkUpper(atrPct); // 과소/과대 변동 구간 배제
+        bool strongBody = (body / range) >= 0.5m;          // 몸통 비율 완화 (0.6 -> 0.5)
+        bool notOverextended = Math.Abs(priceNow - ema20) / (priceNow == 0 ? 1 : priceNow) <= 0.02m; // EMA20 이격 ≤ 2%
+        bool rsiOk = rsi > 35m && rsi < 70m;               // RSI 완화
+        bool volOk = last.candle_acc_trade_volume >= (avgVol5 * 1.2m); // 거래량 완화(최근 5봉 평균의 1.2배)
+        bool atrAssist = atrPct >= 0.3m && atrPct <= 5.0m; // ATR 보조 범위 확장
 
-        Logger.Debug($"BUYCHK trendUp:{trendUp}, breakout:{breakout}, strongBody:{strongBody}, nearEMA20:{notOverextended}, RSI:{rsi:F2}, volOk:{volOk}, ATR%:{atrPct:F2}");
+        // 종합 진입 조건
+        bool canBuy = (trendUp || breakout) && notOverextended && strongBody;
+        if (canBuy)
+        {
+            canBuy = rsiOk && (volOk || atrAssist);
+        }
 
-        return trendUp && breakout && strongBody && notOverextended && rsiOk && volOk && atrOk;
+        Logger.Debug($"BUYCHK trendUp:{trendUp}, breakout:{breakout}, strongBody:{strongBody}, nearEMA20:{notOverextended}, RSI:{rsi:F2}, volOk:{volOk}, ATR%:{atrPct:F2}, live:{(livePrice.HasValue ? "Y" : "N")}");
 
-        static bool atrOkUpper(decimal atrPctVal) => atrPctVal <= 3.0m;
+        return canBuy;
     }
+
 
     /// <summary>
     /// 보유 코인 가격/손익 계산
