@@ -5,10 +5,22 @@ namespace UpBot.Models
 {
     public class TradeHistory : ObservableObject
     {
+        private string _toBeKey;
         [PrimaryKey]
-        public string Id { get; set; }
+        public string ToBeKey
+        {
+            get => _toBeKey ?? (_toBeKey = $"{Market}-{TradeDate}");
+            set => _toBeKey = value;
+        }
 
-        private string _coinName;
+        private string _market = string.Empty;
+        public string Market
+        {
+            get => _market;
+            set => SetProperty(ref _market, value);
+        }
+
+        private string _coinName = string.Empty;
         /// <summary>
         /// 코인이름
         /// </summary>
@@ -18,18 +30,7 @@ namespace UpBot.Models
             set => SetProperty(ref _coinName, value);
         }
 
-        private string _side;
-        /// <summary>
-        /// 주문 방향(매수/매도)
-        /// Allowed: ask, bid
-        /// </summary>
-        public string Side
-        {
-            get => _side;
-            set => SetProperty(ref _side, value);
-        }
-
-        private string _buyPrice;
+        private string _buyPrice = string.Empty;
         /// <summary>
         /// 매수 단가
         /// </summary>
@@ -39,7 +40,7 @@ namespace UpBot.Models
             set => SetProperty(ref _buyPrice, value);
         }
 
-        private string _sellPrice;
+        private string _sellPrice = string.Empty;
         /// <summary>
         /// 매도단가
         /// </summary>
@@ -49,7 +50,7 @@ namespace UpBot.Models
             set => SetProperty(ref _sellPrice, value);
         }
 
-        private string _volume;
+        private string _volume = string.Empty;
         /// <summary>
         /// 주문 수량
         /// </summary>
@@ -59,7 +60,7 @@ namespace UpBot.Models
             set => SetProperty(ref _volume, value);
         }
 
-        private string _profitAmount;
+        private string _profitAmount = string.Empty;
         /// <summary>
         /// 손익 금액
         /// </summary>
@@ -69,7 +70,7 @@ namespace UpBot.Models
             set => SetProperty(ref _profitAmount, value);
         }
 
-        private string _profitPercent;
+        private string _profitPercent = string.Empty;
         /// <summary>
         /// 손익 퍼센트
         /// </summary>
@@ -79,14 +80,24 @@ namespace UpBot.Models
             set => SetProperty(ref _profitPercent, value);
         }
 
-        private DateTime _tradeDate;
+        private string _buyTradeDate = "";
         /// <summary>
-        /// 거래일자
+        /// 매수일자
         /// </summary>
-        public DateTime TradeDate
+        public string TradeDate
         {
-            get => _tradeDate;
-            set => SetProperty(ref _tradeDate, value);
+            get => _buyTradeDate;
+            set => SetProperty(ref _buyTradeDate, value);
+        }
+
+        private string _sellTradeDate = "";
+        /// <summary>
+        /// 매도일자
+        /// </summary>
+        public string SellTradeDate
+        {
+            get => _sellTradeDate;
+            set => SetProperty(ref _sellTradeDate, value);
         }
     }
 }

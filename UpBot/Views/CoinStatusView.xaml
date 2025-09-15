@@ -23,6 +23,8 @@
             <Button Content="시작" Command="{Binding StartCommand}" Width="80" Margin="0,0,10,0"/>
             <Button Content="중지" Command="{Binding StopCommand}" Width="80" Margin="0,0,10,0"/>
             <!--<Button Content="일괄 매도" Command="{Binding SellAllCommand}" Width="100"/>-->
+
+            <TextBlock Text="{Binding StatusMessage}" Foreground="Black" FontSize="20" FontWeight="Bold" VerticalAlignment="Center" Margin="20,0,0,0"/>
         </StackPanel>
         <ListView ItemsSource="{Binding TradeHistories}">
             <ListView.View>

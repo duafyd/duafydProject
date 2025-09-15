@@ -1,6 +1,5 @@
-﻿using Microsoft.Extensions.DependencyInjection;
-using System.Collections.ObjectModel;
-using System.Net.Http;
+﻿using ControlzEx.Standard;
+using Microsoft.Extensions.DependencyInjection;
 using System.Text.Json;
 using UpBot.Core;
 using UpBot.Models;
@@ -11,36 +10,8 @@ namespace UpBot.Services;
 
 public class Bot
 {
-    /// <summary>
-    /// 관리 종목 수
-    /// </summary>
-    public int StockCount => 2;
-
-    /// <summary>
-    /// 목표 수익률(%) - 5분봉용
-    /// 백스톱(상한선) 역할. 트레일링 시작 전까지만 유효
-    /// </summary>
-    public decimal ProfitTargetPercent => 1.5m;
-
-    /// <summary>
-    /// 손절 수익률(%) - 5분봉용
-    /// </summary>
-    public decimal StopLossPercent => -0.7m;
-
-    /// <summary>
-    /// 트레일링 시작 수익률(%) - 이 이상 이익에서만 드로우다운 감시
-    /// </summary>
-    public decimal TrailStartPercent => 0.7m;
-
-    /// <summary>
-    /// 트레일링 드로우다운 폭(%) - 최대이익에서 이만큼 반납 시 매도
-    /// </summary>
-    public decimal TrailDrawdownPercent => 0.2m;
-
-    /// <summary>
-    /// 매매 후 동일 종목 쿨다운 시간
-    /// </summary>
-    public TimeSpan CooldownAfterTrade => TimeSpan.FromMinutes(30);
+    public int StockCount => AppData.CashBalance.HasValue && AppData.CashBalance.Value >= 30000 ? 2 : 1;
+    public TimeSpan CooldownAfterTrade => TimeSpan.FromMinutes(60);
 
     private readonly ApiService Api;
     private readonly AppDataService AppData;
@@ -53,17 +24,11 @@ public class Bot
     private bool _isSelling;
 
     public decimal TotalBalance { get; private set; }
-
     public List<Market> Markets { get; private set; } = new();
 
-    // 봉 마감 체크용(마켓+단위 -> 마지막 처리한 봉 KST 시각)
     private readonly Dictionary<string, string> _lastProcessedCandleKst = new();
-
-    // 트레일링용(마켓 -> 관측된 최대 수익률)
-    private readonly Dictionary<string, decimal> _peakProfitPercent = new();
-
-    // 쿨다운(마켓 -> 쿨다운 만료 시각 UTC)
     private readonly Dictionary<string, DateTime> _cooldowns = new();
+    private readonly Dictionary<string, int> _buyStage = new(); // 0=없음,1=1차,2=2차,3=3차
 
     public Bot()
     {
@@ -71,349 +36,295 @@ public class Bot
         AppData = App.ServiceProvider.GetRequiredService<AppDataService>();
         Database = App.ServiceProvider.GetRequiredService<DatabaseService>();
 
-        _buyTimer = new Timer(TimeSpan.FromMinutes(1));
+        _buyTimer = new Timer(TimeSpan.FromMinutes(5));
         _buyTimer.Elapsed += async (s, e) => await CheckBuyAsync();
 
-        _sellTimer = new Timer(TimeSpan.FromSeconds(2)); // 2초
+        _sellTimer = new Timer(TimeSpan.FromSeconds(5));
         _sellTimer.Elapsed += async (s, e) => await CheckSellAsync();
     }
 
     public async void Start()
     {
         _sellTimer.Start();
-        await CheckSellAsync(); // 즉시 실행
+        await CheckSellAsync();
 
         _buyTimer.Start();
-        await CheckBuyAsync(); // 즉시 실행        
+        await CheckBuyAsync();
 
-        Logger.Info("Bot started.");
+        Logger.Info("Swing Bot started.");
     }
 
     public void Stop()
     {
         _buyTimer.Stop();
         _sellTimer.Stop();
-
         Logger.Info("Bot stopped.");
     }
 
+    // ==============================
+    // 매수 체크 (분할매수 + 슬롯 제한)
+    // ==============================
     private async Task CheckBuyAsync()
     {
+        if (_isBuying) return;
+        _isBuying = true;
+
+        Logger.Info("********* 매수 검사 시작");
+
         try
         {
-            if (_isBuying)
-                return;
+            if (!AppData.CashBalance.HasValue || AppData.CashBalance < 5000) return;
 
-            _isBuying = true;
-
-            if (!AppData.CashBalance.HasValue)
-            {
-                return;
-            }
-
-            if (AppData.CashBalance < 5000)
-            {
-                Logger.Warn($"잔고부족({AppData.CashBalance.Value.ToString("C")})");
-                return;
-            }
-
-            Logger.Debug("Checking buy conditions...");
-
-            // 매수 조건 확인 및 매수 로직 구현
             if (Markets.Count == 0)
             {
-                // 마켓 전체 가져오기
-                var markets = await Api.QuotationApi.TradingPairs.GetMarketsAsync();
-                if (markets != null)
-                    Markets = markets;
+                var marketsLoaded = await Api.QuotationApi.TradingPairs.GetMarketsAsync();
+                if (marketsLoaded == null || marketsLoaded.Count == 0) return;
+                Markets = marketsLoaded;
             }
 
-            // 현재 보유 종목 조회(보유 중인 종목은 매수 제외)
             var accounts = await Api.ExchangeApi.Asset.GetAccountsAsync();
-            var heldMarkets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            if (accounts != null)
+            var heldMarkets = new HashSet<string>(accounts?
+                .Where(a => a.currency != "KRW" && a.BalanceDecimal > 0 && a.AvgBuyPriceDecimal > 0)
+                .Select(a => $"{a.unit_currency}-{a.currency}") ?? new List<string>());
+
+            int slotsLeft = StockCount - heldMarkets.Count;
+            if (slotsLeft <= 0)
             {
-                foreach (var a in accounts.Where(a => a.currency != "KRW" && a.BalanceDecimal > 0 && a.AvgBuyPriceDecimal > 0))
-                {
-                    heldMarkets.Add($"{a.unit_currency}-{a.currency}");
-                }
+                Logger.Info($"BUYCHK RETURN: 슬롯 다 찼음.({StockCount}/{heldMarkets.Count})");
+                return; // 슬롯 다 찼음
             }
 
-            // 슬롯 초과 보유 시 매수 중단
-            if (heldMarkets.Count >= StockCount)
-            {
-                Logger.Debug($"보유 종목 {heldMarkets.Count}개가 슬롯 {StockCount}개 이상. 매수 건너뜀.");
-                return;
-            }
+            var goodMarkets = Markets.Where(m => m.market.StartsWith("KRW-")).Select(m => m.market).ToList();
+            var tickers = await Api.QuotationApi.Ticker.GetTickersAsync(string.Join(",", goodMarkets));
+            if (tickers == null || tickers.Count == 0) return;
 
-            // 유의종목 제외한 KRW 마켓만 필터링
-            var goodMarkets = Markets
-                //.Where(m => m.market.StartsWith("KRW-") && m.IsSafe)
-                .Where(m => m.market.StartsWith("KRW-"))
-                .Select(m => m.market)
-                .ToList();
-
-            var marketsStr = string.Join(",", goodMarkets);
-            // ticker 데이터 가져오기(거래대금)
-            var tickers = await Api.QuotationApi.Ticker.GetTickersAsync(marketsStr);
-
-            // 거래대금 상위 20개
-            var top20 = tickers
-                .Where(t => !t.market.Contains("USDT")) // 테더 마켓 제외
+            var top = tickers
                 .OrderByDescending(t => t.acc_trade_price_24h)
-                .Take(20)
+                .Take(10)
                 .ToList();
 
-            // 로그 기록
-            var top20Dict = top20?.ToDictionary(t => t.market, t => t.acc_trade_price_24h);
-            var top20Json = JsonSerializer.Serialize(top20Dict);
-            Logger.Info($"Top 20 Markets by 24h Trade Price: {top20Json}");
-
-            // 상위 20개 종목에 대해 매수 조건 확인
-            foreach (var t in top20)
+            foreach (var t in top)
             {
-                // 보유 중이면 스킵
-                if (heldMarkets.Contains(t.market))
-                {
-                    Logger.Debug($"Skip {t.market} - 이미 보유 중");
-                    continue;
-                }
+                if (heldMarkets.Contains(t.market)) continue;
+                if (_cooldowns.TryGetValue(t.market, out var until) && DateTime.UtcNow < until) continue;
+                if (slotsLeft <= 0) break; // 슬롯 다 찼으면 종료
 
-                // 쿨다운 체크
-                if (_cooldowns.TryGetValue(t.market, out var untilUtc) && DateTime.UtcNow < untilUtc)
-                {
-                    Logger.Debug($"Cooldown active for {t.market} until {untilUtc:u}");
-                    continue;
-                }
+                await Task.Delay(200);
 
-                // 요청 제한 회피
-                await Task.Delay(100);
-
-                Logger.Info($"Checking should buy {t.market}");
-
-                var unit = CandleMinuteUnitType.Minute5; // 5분봉
-                var candles = await Api.QuotationApi.OHLCV.GetCandlesMinutesAsync(
+                var candles15m = await Api.QuotationApi.OHLCV.GetCandlesMinutesAsync(
                     market: t.market,
                     count: 200,
-                    unit: unit);
+                    unit: CandleMinuteUnitType.Minute15);
+                if (candles15m == null) continue;
 
-                // ShouldBuy는 최소 80봉 필요
-                if (candles == null || candles.Count < 80)
+                var latestKst = candles15m.Last().candle_date_time_kst;
+                var key = $"{t.market}:15";
+                if (_lastProcessedCandleKst.TryGetValue(key, out var prev) && prev == latestKst) continue;
+                _lastProcessedCandleKst[key] = latestKst;
+
+                int stage = _buyStage.ContainsKey(t.market) ? _buyStage[t.market] : 0;
+                int newStage = await ShouldBuySwingAsync(t.market, candles15m, stage);
+                if (newStage <= stage) continue;
+
+                // 종목당 최대 투자금
+                var maxInvest = AppData.TotalBalance / StockCount;
+
+                // 단계별 투자 비율 (슬롯 개수에 따라)
+                decimal ratio = 0m;
+                if (StockCount == 1)
                 {
-                    Logger.Warn($"{t.market}: 캔들 데이터 부족");
-                    continue;
-                }
-
-                // 봉 마감 시점 체크(새 봉 생성 시에만 평가) + 보조(실시간) 체크 허용
-                var firstKst = DateTime.Parse(candles.First().candle_date_time_kst);
-                var lastKst = DateTime.Parse(candles.Last().candle_date_time_kst);
-                var latestCandle = firstKst >= lastKst ? candles.First() : candles.Last();
-
-                var keyClose = $"{t.market}:{(int)unit}";
-                var latestKstStr = latestCandle.candle_date_time_kst;
-
-                var isNewClosedCandle = true;
-                if (_lastProcessedCandleKst.TryGetValue(keyClose, out var prevKst) && prevKst == latestKstStr)
-                {
-                    // 이전에 처리한 것과 같은 봉이면: 보조(실시간) 체크로 평가
-                    isNewClosedCandle = false;
-                    Logger.Debug($"No new closed candle for {t.market}. Running live pre-check with ticker price {t.trade_price}.");
+                    ratio = newStage switch
+                    {
+                        1 => 0.5m, // 50%
+                        2 => 0.3m, // 30%
+                        3 => 0.2m, // 20%
+                        _ => 0m
+                    };
                 }
                 else
                 {
-                    // 새로 마감한 봉이면 마킹
-                    _lastProcessedCandleKst[keyClose] = latestKstStr;
+                    ratio = newStage switch
+                    {
+                        1 => 0.4m, // 40%
+                        2 => 0.3m, // 30%
+                        3 => 0.3m, // 30%
+                        _ => 0m
+                    };
                 }
 
-                var isBuySignal = isNewClosedCandle
-                    ? ShouldBuy(candles)
-                    : ShouldBuy(candles, livePrice: t.trade_price); // 보조 신호: 실시간 가격으로 돌파/몸통 재평가
+                var buyAmount = maxInvest * ratio;
+                if (buyAmount < 5000) continue;
 
-                if (isBuySignal)
+                var orderChance = await Api.ExchangeApi.Order.GetOrdersChanceAsync(t.market);
+                if (orderChance == null) continue;
+
+                if (!decimal.TryParse(orderChance.bid_fee, out var feeRate)) feeRate = 0m;
+                buyAmount = Math.Floor(buyAmount / (1 + feeRate));
+
+                var order = await Api.ExchangeApi.Order.PostMarketBuyAsync(t.market, buyAmount.ToString());
+                if (order == null) continue;
+
+                await Database.SaveTradeHistory(new TradeHistory
                 {
-                    try
-                    {
-                        var coinName = GetCoinName(t.market);
-                        Logger.Info($"매수 타이밍 확인 for {t.market}/{coinName} at Price {t.trade_price}");
-                        // 주문가능 정보 조회
-                        var orderChange = await Api.ExchangeApi.Order.GetOrdersChanceAsync(t.market);
-                        if (orderChange == null)
-                        {
-                            Logger.Error($"주문 가능 정보 조회 실패 for {t.market}");
-                            continue;
-                        }
+                    Market = t.market,
+                    CoinName = GetCoinName(t.market),
+                    BuyPrice = order.price,
+                    Volume = order.volume,
+                    TradeDate = DateTime.UtcNow.ToString("yyyyMMdd"),
+                }, true);
 
-                        var minPerOrder = 5100m; // 5,000 + 버퍼(수수료/슬리피지)
-                        var maxSlots = Math.Max(1, (int)Math.Floor(AppData.CashBalance!.Value / minPerOrder));
-                        // 원하는 상한과 교차
-                        var slots = Math.Min(StockCount, maxSlots);
+                _buyStage[t.market] = newStage;
+                Logger.Info($"매수 단계 {newStage} 완료 {t.market} (금액:{buyAmount})");
 
-                        // 종목당 투자금
-                        var investAmount = AppData.TotalBalance / slots;
-                        var buyAmount = Math.Min(investAmount, AppData.CashBalance.Value);
-                        buyAmount = Math.Floor(buyAmount / (1 + decimal.Parse(orderChange.bid_fee))); // 수수료 고려
-
-                        if (buyAmount < 5000)
-                        {
-                            Logger.Warn($"매수 금액 + 수수료 부족({buyAmount.ToString("C")}) for {t.market}");
-                            continue;
-                        }
-
-                        // 시장가로 매수
-                        var order = await Api.ExchangeApi.Order.PostMarketBuyAsync(t.market, buyAmount.ToString());
-                        if (order == null)
-                        {
-                            Logger.Error($"매수 실패 for {t.market}");
-                            continue;
-                        }
-
-                        var buyInfo = new TradeHistory
-                        {
-                            Id = order.uuid,
-                            Side = order.side,
-                            CoinName = coinName,
-                            BuyPrice = order.price,
-                            Volume = order.executed_volume,
-                        };
-
-                        Database.SaveTradeHistory(buyInfo);
-
-                        // 매수 후 쿨다운 및 트레일링 상태 초기화
-                        _cooldowns[t.market] = DateTime.UtcNow + CooldownAfterTrade;
-                        _peakProfitPercent[t.market] = 0m;
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.Error($"Error buying {t.market}", ex);
-                    }
-                    break;
-                }
+                heldMarkets.Add(t.market);
+                slotsLeft--;
+                if (slotsLeft <= 0) break; // 필요한 만큼만 매수
             }
         }
         catch (Exception ex)
         {
-            // 예외 처리
             Logger.Error("Error in CheckBuyAsync", ex);
         }
         finally
         {
             _isBuying = false;
-            Logger.Debug("Finished checking buy conditions.");
+            Logger.Info("********* 매수 검사 종료");
         }
     }
 
+    // ==============================
+    // 매도 체크 (볼린저 익절 / MA25 손절)
+    // ==============================
     private async Task CheckSellAsync()
     {
-        if (_isSelling)
-            return;
-
+        if (_isSelling) return;
         _isSelling = true;
-
-        Logger.Debug("Checking sell conditions...");
-
-        if (Markets.Count == 0)
-        {
-            var markets = await Api.QuotationApi.TradingPairs.GetMarketsAsync();
-            if (markets != null)
-                Markets = markets;
-        }
 
         try
         {
             var account = await Api.ExchangeApi.Asset.GetAccountsAsync();
-            if (account == null || account.Count == 0)
+            if (account == null || account.Count == 0) return;
+
+            // 현금 잔고
+            AppData.CashBalance = account.FirstOrDefault(a => a.currency == "KRW")?.BalanceDecimal ?? 0;
+
+            var coins = account
+                .Where(a => a.currency != "KRW" && a.BalanceDecimal > 0 && a.AvgBuyPriceDecimal > 0)
+                .ToList();
+
+            // ===== TotalBalance 갱신 =====
+            decimal coinEval = 0m;
+            foreach (var acc in coins)
             {
-                Logger.Warn("보유 자산 없음");
+                var ticker = await Api.QuotationApi.Ticker.GetTickersAsync($"{acc.unit_currency}-{acc.currency}");
+                var price = ticker?.FirstOrDefault()?.trade_price ?? 0m;
+                coinEval += acc.BalanceDecimal * price;
+            }
+            TotalBalance = AppData.CashBalance.Value + coinEval;
+
+            if (coins.Count == 0)
+            {
+                Logger.Debug("SELLCHK RETURN: 보유 코인 없음.");
+
+                AppData.SetCoinStatus(null);
+
                 return;
             }
 
             var list = new List<TradeHistory>();
+            foreach(var coin in coins)
+            {
+                var market = $"{coin.unit_currency}-{coin.currency}";
+                var coinName = GetCoinName(market);
+                var (currentPrice, profit, profitPercent) = await GetCurrentPrice(coin);
 
-            AppData.CashBalance = account?.FirstOrDefault(a => a.currency == "KRW")?.BalanceDecimal ?? 0;
-            foreach (var acc in account!.Where(a => a.currency != "KRW" && a.BalanceDecimal > 0 && a.AvgBuyPriceDecimal > 0))
+                list.Add(new TradeHistory
+                {
+                    Market = market,
+                    CoinName = coinName,
+                    BuyPrice = coin.AvgBuyPriceDecimal.ToString("C"),
+                    Volume = coin.BalanceDecimal.ToString("G29"),
+                    ProfitAmount = profit.ToString("C"),
+                    ProfitPercent = profitPercent.ToString("F2") + "%",
+                });
+
+                var history = new TradeHistory()
+                {
+                    Market = $"{coin.unit_currency}-{coin.currency}",
+                    BuyPrice = coin.avg_buy_price,
+                    Volume = coin.balance,
+
+                };
+                if (history != null)
+                    list.Add(history);
+            }
+
+            foreach (var acc in coins)
             {
                 try
                 {
-                    var (currentPrice, profit, profitPercent) = await GetCurrentPrice(acc);
+                    var market = $"{acc.unit_currency}-{acc.currency}";
+                    var coinName = GetCoinName(market);
 
-                    // 최소 매도 가능 금액(약 5,000원) 충족 여부는 '평가금액'으로 판단
-                    var evaluation = acc.BalanceDecimal * currentPrice;
-                    if (evaluation >= 5000)
+                    var candles15m = await Api.QuotationApi.OHLCV.GetCandlesMinutesAsync(
+                        market: market,
+                        count: 50,
+                        unit: CandleMinuteUnitType.Minute15);
+                    if (candles15m == null || candles15m.Count < 30) continue;
+
+                    var closes = candles15m.Select(c => c.trade_price).ToList();
+                    var ma25 = MovingAverage(closes, 25);
+                    var (bbUpper, _) = BollingerBands(closes, 20, 2);
+
+                    var last = candles15m[^1];
+
+                    bool sellSignal = false;
+                    string reason = "";
+
+                    if (last.trade_price > bbUpper)
                     {
-                        var market = $"{acc.unit_currency}-{acc.currency}";
-                        var coinName = GetCoinName(market);
-                        list.Add(new TradeHistory
-                        {
-                            CoinName = coinName,
-                            BuyPrice = acc.AvgBuyPriceDecimal.ToString("C"),
-                            Volume = acc.BalanceDecimal.ToString("G29"),
-                            ProfitAmount = profit.ToString("C"),
-                            ProfitPercent = profitPercent.ToString("F2") + "%",
-                        });
+                        sellSignal = true;
+                        reason = "BOLLINGER BREAKOUT";
+                    }
 
-                        // 트레일링: 최대 수익률 갱신
-                        if (_peakProfitPercent.TryGetValue(market, out var peak))
+                    if (last.trade_price < ma25)
+                    {
+                        sellSignal = true;
+                        reason = "MA25 BREAKDOWN";
+                    }
+
+                    if (sellSignal)
+                    {
+                        Logger.Info($"SELL SIGNAL {reason} {market}: Close={last.trade_price}");
+
+                        var sell = await Api.ExchangeApi.Order.PostMarketSellAsync(market, acc.balance);
+                        if (sell != null)
                         {
-                            if (profitPercent > peak)
+                            Logger.Info($"SELL EXECUTED {market}: 이유={reason}");
+                            var (currentPrice, profit, profitPercent) = await GetCurrentPrice(acc);
+
+                            await Database.SaveTradeHistory(new TradeHistory
                             {
-                                _peakProfitPercent[market] = profitPercent;
-                                peak = profitPercent;
-                            }
-                        }
-                        else
-                        {
-                            _peakProfitPercent[market] = profitPercent;
-                            peak = profitPercent;
-                        }
+                                Market = market,
+                                CoinName = coinName,
+                                SellPrice = sell.price,
+                                ProfitAmount = profit.ToString("C"),
+                                ProfitPercent = profitPercent.ToString("F2") + "%",
+                                SellTradeDate = DateTime.UtcNow.ToString("yyyyMMdd"),
+                            }, false);
 
-                        // 트레일링 상태 여부
-                        var inTrailing = peak >= TrailStartPercent;
-
-                        // 우선순위: 손절(항상) > 트레일링(시작 후) > 고정 목표(트레일링 전까지만)
-                        bool trailing = inTrailing && (peak - profitPercent) >= TrailDrawdownPercent;
-                        bool takeProfit = !inTrailing && profitPercent >= ProfitTargetPercent; // 트레일링 시작 전까지만 TP 허용
-                        bool stopLoss = profitPercent <= StopLossPercent;
-
-                        if (stopLoss || trailing || takeProfit)
-                        {
-                            var reason = stopLoss ? "SL" : (trailing ? "TRAIL" : "TP");
-                            Logger.Info($"Sell Signal({reason}) for {acc.currency} at Price {currentPrice}, Profit: {profit} ({profitPercent:F2}%), Peak:{peak:F2}%");
-
-                            var sell = await Api.ExchangeApi.Order.PostMarketSellAsync(market, acc.balance);
-                            if (sell != null)
-                            {
-                                Logger.Info($"매도 완료 for {acc.currency} at Price {currentPrice}, Profit: {profit} ({profitPercent:F2}%)");
-
-                                var sellInfo = new TradeHistory
-                                {
-                                    Id = sell.uuid,
-                                    Side = sell.side,
-                                    CoinName = coinName,
-                                    BuyPrice = acc.AvgBuyPriceDecimal.ToString("C"),
-                                    SellPrice = sell.price,
-                                    Volume = sell.executed_volume,
-                                    ProfitAmount = profit.ToString("C"),
-                                    ProfitPercent = profitPercent.ToString("F2") + "%",
-                                };
-
-                                Database.SaveTradeHistory(sellInfo);
-
-                                // 매도 후 쿨다운 및 트레일링 상태 초기화
-                                _cooldowns[market] = DateTime.UtcNow + CooldownAfterTrade;
-                                _peakProfitPercent.Remove(market);
-                            }
-                            else
-                            {
-                                Logger.Error($"매도 실패 for {acc.currency}");
-                            }
+                            _cooldowns[market] = DateTime.UtcNow + CooldownAfterTrade;
+                            _buyStage[market] = 0; // 초기화
                         }
                     }
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    Logger.Error("SELLCHK 예외 발생", ex);
+                }
             }
 
-            AppData.CoinStatus = new List<TradeHistory>(list);
-
+            Logger.Debug($"SELLCHK 완료: TotalBalance={TotalBalance:F0}, Cash={AppData.CashBalance}, Coins={coins.Count}");
         }
         catch (Exception ex)
         {
@@ -422,76 +333,79 @@ public class Bot
         finally
         {
             _isSelling = false;
-            Logger.Debug("Finished checking sell conditions.");
         }
     }
 
-    /// <summary>
-    /// 단타 매수 타이밍 감지(완화+개선 버전)
-    /// - 추세 OR 돌파 허용: (trendUp || breakout)
-    /// - RSI 35~70
-    /// - 거래량 완화: 최근 5봉 평균의 1.2배 이상 또는 ATR 보조(>=0.3% && <=5.0%)
-    /// - 봉 마감이 없어도 livePrice로 보조 체크 가능
-    /// </summary>
-    public bool ShouldBuy(List<CandleMinute> candles, decimal? livePrice = null)
+
+    // ==============================
+    // 매수 조건 (정배열 전환 + 거래량 필터)
+    // ==============================
+    private async Task<int> ShouldBuySwingAsync(string market, List<CandleMinute> candles15m, int currentStage)
     {
-        if (candles == null || candles.Count < 80) return false;
+        if (candles15m.Count < 30) return currentStage;
 
-        var closes = candles.Select(c => c.trade_price).ToList();
+        var closes = candles15m.Select(c => c.trade_price).ToList();
+        var ma5 = MovingAverage(closes, 5);
+        var ma10 = MovingAverage(closes, 10);
+        var ma15 = MovingAverage(closes, 15);
+        var ma25 = MovingAverage(closes, 25);
 
-        var ema20Series = TechnicalIndicators.EMA(closes, 20);
-        var ema60Series = TechnicalIndicators.EMA(closes, 60);
-        if (ema20Series.Count < 2 || ema60Series.Count == 0) return false;
+        var last = candles15m[^1];
+        var prevCloses = closes.Take(closes.Count - 1).ToList();
 
-        var ema20 = ema20Series[^1];
-        var ema20Prev = ema20Series[^2];
-        var ema60 = ema60Series[^1];
+        var prevMa5 = MovingAverage(prevCloses, 5);
+        var prevMa10 = MovingAverage(prevCloses, 10);
+        var prevMa15 = MovingAverage(prevCloses, 15);
+        var prevMa25 = MovingAverage(prevCloses, 25);
 
-        var last = candles[^1];
-        var prev = candles[^2];
+        bool isNowGolden = (ma5 > ma10 && ma10 > ma15 && ma15 > ma25);
+        bool wasGolden = (prevMa5 > prevMa10 && prevMa10 > prevMa15 && prevMa15 > prevMa25);
 
-        // 실시간 평가용 가격(없으면 종가 사용)
-        var priceNow = livePrice ?? last.trade_price;
+        // 거래량 필터
+        var avgVol5 = candles15m.SkipLast(1).TakeLast(5).Average(c => c.candle_acc_trade_volume);
+        bool volBoost = last.candle_acc_trade_volume > avgVol5;
 
-        // RSI
-        var rsiSeries = TechnicalIndicators.RSI(closes, 14);
-        if (rsiSeries.Count == 0) return false;
-        var rsi = rsiSeries[^1];
-
-        // 변동성(ATR)
-        var atr = ComputeAtr(candles, 14);
-        if (atr <= 0) return false;
-        var atrPct = atr / (priceNow == 0 ? 1 : priceNow) * 100m;
-
-        // 거래량 평균(최근 5봉, 마지막 봉 제외)
-        decimal avgVol5 = 0m;
-        for (int i = candles.Count - 6; i < candles.Count - 1; i++)
-            avgVol5 += candles[i].candle_acc_trade_volume;
-        avgVol5 /= 5m;
-
-        // 조건(완화+개선)
-        bool trendUp = ema20 > ema60 && ema20 > ema20Prev; // 기존 추세 정의 유지
-        bool breakout = priceNow > prev.high_price;        // 실시간 가격으로 돌파 판단
-        decimal body = Math.Abs(priceNow - last.opening_price);
-        decimal range = Math.Max(0.00000001m, last.high_price - last.low_price);
-        bool strongBody = (body / range) >= 0.5m;          // 몸통 비율 완화 (0.6 -> 0.5)
-        bool notOverextended = Math.Abs(priceNow - ema20) / (priceNow == 0 ? 1 : priceNow) <= 0.02m; // EMA20 이격 ≤ 2%
-        bool rsiOk = rsi > 35m && rsi < 70m;               // RSI 완화
-        bool volOk = last.candle_acc_trade_volume >= (avgVol5 * 1.2m); // 거래량 완화(최근 5봉 평균의 1.2배)
-        bool atrAssist = atrPct >= 0.3m && atrPct <= 5.0m; // ATR 보조 범위 확장
-
-        // 종합 진입 조건
-        bool canBuy = (trendUp || breakout) && notOverextended && strongBody;
-        if (canBuy)
+        // 1️⃣ 정배열 전환 순간 + MA5 터치
+        if (currentStage == 0 && !wasGolden && isNowGolden)
         {
-            canBuy = rsiOk && (volOk || atrAssist);
+            if (last.low_price <= ma5 && last.trade_price >= ma5 && volBoost)
+            {
+                Logger.Debug($"BUYCHK PASS {market}: 역배→정배 전환 + MA5 + 거래량 증가");
+                return 1;
+            }
         }
 
-        Logger.Debug($"BUYCHK trendUp:{trendUp}, breakout:{breakout}, strongBody:{strongBody}, nearEMA20:{notOverextended}, RSI:{rsi:F2}, volOk:{volOk}, ATR%:{atrPct:F2}, live:{(livePrice.HasValue ? "Y" : "N")}");
+        // 2️⃣ 추가매수
+        if (currentStage == 1 && last.low_price <= ma15 && last.trade_price >= ma15)
+            return 2;
+        if (currentStage == 2 && last.low_price <= ma10 && last.trade_price >= ma10)
+            return 3;
 
-        return canBuy;
+        return currentStage;
     }
 
+
+    // ==============================
+    // 보조 함수
+    // ==============================
+    private decimal MovingAverage(List<decimal> prices, int period)
+    {
+        if (prices.Count < period) return 0m;
+        return prices.Skip(prices.Count - period).Average();
+    }
+
+    private (decimal upper, decimal lower) BollingerBands(List<decimal> prices, int period, int k)
+    {
+        if (prices.Count < period) return (0m, 0m);
+        var subset = prices.Skip(prices.Count - period).ToList();
+        decimal sma = subset.Average();
+        decimal variance = subset.Sum(p => (p - sma) * (p - sma)) / period;
+        decimal stdDev = (decimal)Math.Sqrt((double)variance);
+        return (sma + k * stdDev, sma - k * stdDev);
+    }
+
+    private string GetCoinName(string market)
+        => Markets.FirstOrDefault(m => m.market == market)?.korean_name ?? market;
 
     /// <summary>
     /// 보유 코인 가격/손익 계산
@@ -515,28 +429,5 @@ public class Bot
 
         // BUGFIX: 기존 코드가 evaluation을 currentPrice로 반환하던 문제 수정
         return (currentPrice, profit, profitPercent);
-    }
-
-    private decimal ComputeAtr(List<CandleMinute> candles, int period)
-    {
-        if (candles == null || candles.Count <= period) return 0m;
-
-        decimal sumTr = 0m;
-        for (int i = candles.Count - period; i < candles.Count; i++)
-        {
-            var cur = candles[i];
-            var prevClose = candles[i - 1].trade_price;
-            decimal tr1 = cur.high_price - cur.low_price;
-            decimal tr2 = Math.Abs(cur.high_price - prevClose);
-            decimal tr3 = Math.Abs(cur.low_price - prevClose);
-            decimal tr = Math.Max(tr1, Math.Max(tr2, tr3));
-            sumTr += tr;
-        }
-        return sumTr / period;
-    }
-
-    private string GetCoinName(string market)
-    {
-        return Markets.FirstOrDefault(m => m.market == market)?.korean_name ?? market;
     }
 }

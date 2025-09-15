@@ -1,15 +1,11 @@
-using System.IdentityModel.Tokens.Jwt;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
-using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
-using System.Threading.Tasks;
 using System.Web;
-using UpBot.Models.Api;
+using UpBot.Core;
 using UpBot.Services.Apis;
 
 namespace UpBot.Services
@@ -46,14 +42,17 @@ namespace UpBot.Services
             }
             catch (HttpRequestException ex)
             {
+                Logger.Error(ex.Message, ex);
                 return default;
             }
             catch (JsonException ex)
             {
+                Logger.Error(ex.Message, ex);
                 return default;
             }
             catch (Exception ex)
             {
+                Logger.Error(ex.Message, ex);
                 return default;
             }
         }

@@ -13,8 +13,6 @@ public class AppDataService : ObservableObject
         set
         {
             SetProperty(ref _coinStatus, value);
-            if (CoinStatusChanged != null)
-                CoinStatusChanged(this, EventArgs.Empty);
         }
     }
 
@@ -25,6 +23,17 @@ public class AppDataService : ObservableObject
 
     public AppDataService()
     {
+    }
+
+    public void SetCoinStatus(List<TradeHistory>? list)
+    {
+        if (list == null || list.Count == 0)
+            CoinStatus.Clear();
+        else
+            CoinStatus = list.ToList();
+
+        if (CoinStatusChanged != null)
+            CoinStatusChanged(this, EventArgs.Empty);
     }
 
     private decimal GetTotalBalance()

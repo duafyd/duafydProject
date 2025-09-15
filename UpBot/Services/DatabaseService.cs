@@ -1,9 +1,11 @@
+using ControlzEx.Standard;
 using Microsoft.Data.Sqlite;
 using SQLite;
 using System.IO;
 using System.Windows.Controls;
 using UpBot.Core;
 using UpBot.Models;
+using UpBot.Models.Api;
 
 namespace UpBot.Services
 {
@@ -31,44 +33,83 @@ namespace UpBot.Services
 
         private async void CreateTables()
         {
-            //try
-            //{
-            //    var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "UpBot.db");
-            //    var db = new SQLiteAsyncConnection(path);                
-            //    await db.CreateTableAsync<TradeHistory>();
-                
-            //    _db = db;
-            //}
-            //catch (Exception ex)
-            //{
-            //    Logger.Error("테이블 생성 에러", ex);
-            //}
-        }
+            try
+            {
+                SQLitePCL.Batteries_V2.Init();
 
-        public void SaveTradeHistory(TradeHistory history)
+                var path = Path.Combine(@"D:\Upbot\", "UpBot.db");
+                var db = new SQLiteAsyncConnection(path);
+                await db.CreateTableAsync<TradeHistory>();
+
+                _db = db;
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("테이블 생성 에러", ex);
+            }
+        }
+        public async Task SaveTradeHistory(TradeHistory history, bool isBuy)
         {
-            //try
-            //{
-            //    using var conn = new SqliteConnection(_connectionString);
-            //    conn.Open();
-            //    var cmd = conn.CreateCommand();
-            //    cmd.CommandText = @"
-            //    INSERT INTO TradeHistory (CoinName, BuyPrice, SellPrice, ProfitAmount, ProfitPercent, TradeDate)
-            //    VALUES ($coinName, $buyPrice, $sellPrice, $profitAmount, $profitPercent, $tradeDate)";
-            //    cmd.Parameters.AddWithValue("$coinName", history.CoinName);
-            //    cmd.Parameters.AddWithValue("$buyPrice", decimal.Parse(history.BuyPrice));
-            //    cmd.Parameters.AddWithValue("$sellPrice", decimal.Parse(history.SellPrice));
-            //    cmd.Parameters.AddWithValue("$profitAmount", decimal.Parse(history.ProfitAmount));
-            //    cmd.Parameters.AddWithValue("$profitPercent", decimal.Parse(history.ProfitPercent));
-            //    cmd.Parameters.AddWithValue("$tradeDate", history.TradeDate.ToString("o"));
-            //    cmd.ExecuteNonQuery();
-            //}
-            //catch(Exception ex)
-            //{
-            //    Logger.Error("거래내역 저장 에러", ex);
-            //}
-        }
+            try
+            {
+                if (isBuy)
+                {
+                    var query = $"""
+                        SELECT *
+                        FROM TradeHistory
+                        WHERE Market = '{history.Market}'
+                          AND (SellTradeDate IS NULL OR TRIM(SellTradeDate) = '')
+                        ORDER BY TradeDate DESC
+                        LIMIT 1;
+                        """;
 
-        // 거래내역 저장, 조회 등 메서드 추가
+                    var existing = await _db.QueryAsync<TradeHistory>(query);
+                    if (existing == null || existing.Count == 0)
+                    {
+                        // 매수 인서트
+                        await _db.InsertAsync(history);
+                    }
+                    else
+                    {
+                        var price = (decimal.Parse(history.BuyPrice) + decimal.Parse(history.Volume)) / 2;
+                        var volume = (decimal.Parse(existing[0].Volume) + decimal.Parse(history.Volume)).ToString();
+                        
+                        existing[0].BuyPrice = price.ToString();
+                        existing[0].Volume = volume;
+
+                        await _db.UpdateAsync(existing[0]);
+                    }
+                }
+                else
+                {
+                    var query = $"""
+                        SELECT *
+                        FROM TradeHistory
+                        WHERE Market = '{history.Market}'
+                          AND (SellTradeDate IS NULL OR TRIM(SellTradeDate) = '')
+                        ORDER BY TradeDate DESC
+                        LIMIT 1;
+                        """;
+
+                    // 매도 업데이트
+                    var existing = await _db.QueryAsync<TradeHistory>(query);
+
+                    if (existing != null)
+                    {
+                        existing[0].SellPrice = history.SellPrice;
+                        existing[0].SellTradeDate = history.SellTradeDate;
+                        existing[0].ProfitAmount = history.ProfitAmount;
+                        existing[0].ProfitPercent = history.ProfitPercent;
+
+                        await _db.UpdateAsync(existing[0]);
+                    }
+                }
+
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("거래내역 저장 에러", ex);
+            }
+        }
     }
 }

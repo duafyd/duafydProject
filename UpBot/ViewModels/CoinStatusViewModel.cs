@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using System.Collections.ObjectModel;
+using UpBot.Core;
 using UpBot.Models;
 using UpBot.Services;
 
@@ -10,6 +11,13 @@ namespace UpBot.ViewModels
     {
         [ObservableProperty]
         private ObservableCollection<TradeHistory> _tradeHistories;
+
+        private string _statusMessage;
+        public string StatusMessage
+        {
+            get => _statusMessage;
+            set => SetProperty(ref _statusMessage, value);
+        }
 
         private bool _isRunning;
         public bool IsRunning
@@ -36,7 +44,20 @@ namespace UpBot.ViewModels
         {
             App.Current.Dispatcher.Invoke(() =>
             {
-                TradeHistories = new ObservableCollection<TradeHistory>(AppData.CoinStatus);
+                try
+                {
+                    if(AppData.CoinStatus == null || AppData.CoinStatus.Count == 0)
+                    {
+                        TradeHistories?.Clear();                     
+                    }
+                    else
+                    {
+                        TradeHistories = new ObservableCollection<TradeHistory>(AppData.CoinStatus);
+                    }                        
+                    OnPropertyChanged(nameof(TradeHistories));
+                    //StatusMessage = $"Total Balance: {AppData.TotalBalance}";
+                }
+                catch (Exception ex) { Logger.Error(ex.Message, ex); }
             });
         }
 
